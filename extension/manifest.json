@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Lyrics & Vocab Companion (dev)",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Synced lyrics on YouTube Music — tap words to translate, save, and review them anywhere.",
   "permissions": ["storage"],
   "action": {

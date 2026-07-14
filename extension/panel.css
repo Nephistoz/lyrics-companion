@@ -14,10 +14,14 @@
 
 #lc-panel {
   position: fixed;
-  top: 80px;    /* below YT Music's 64px top bar */
+  top: 80px;    /* below YT Music's 64px top bar (until the user moves it) */
   right: 16px;
   bottom: 96px; /* above the 72px player bar */
   width: 340px;
+  min-width: 260px;
+  min-height: 220px;
+  max-width: 640px;
+  resize: both; /* native resize handle, bottom-right corner */
   z-index: 9999;
   display: flex;
   flex-direction: column;
@@ -39,6 +43,12 @@
   padding: 12px 14px;
   border-bottom: 1px solid var(--lc-line, rgba(255, 255, 255, 0.09));
   flex: none;
+  cursor: grab; /* the header doubles as the drag handle */
+  user-select: none;
+  touch-action: none;
+}
+#lc-header:active {
+  cursor: grabbing;
 }
 
 #lc-title {
@@ -81,16 +91,17 @@
 }
 
 .lc-line {
-  margin: 0 0 15px;
+  margin: 0 0 var(--lc-gap, 15px);
 }
 
 .lc-main {
   margin: 0;
   font-size: var(--lc-size, 17px);
   line-height: 1.55;
+  text-align: var(--lc-align, left);
   color: var(--lc-dim, #8b8b98);
   transition: color 0.25s ease, transform 0.25s ease, opacity 0.25s ease, filter 0.3s ease;
-  transform-origin: left center;
+  transform-origin: var(--lc-origin, left center);
 }
 
 /* the signature: a hairline under the active line that fills in real time
@@ -100,7 +111,7 @@
   display: block;
   height: 2px;
   width: 0;
-  margin-top: 5px;
+  margin: 5px var(--lc-hairline-margin, 0) 0;
   border-radius: 2px;
   background: linear-gradient(90deg, var(--lc-accent, #ffb454), transparent);
   transition: width 0.5s linear;
@@ -118,6 +129,7 @@
   margin-top: 3px;
   font-size: calc(var(--lc-size, 17px) * 0.78);
   line-height: 1.4;
+  text-align: var(--lc-align, left);
   color: var(--lc-dim, #8b8b98);
   opacity: 0.85;
   font-style: italic;
@@ -196,12 +208,61 @@
   -webkit-backdrop-filter: blur(16px);
 }
 
+.lc-set-section {
+  margin: 18px 0 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lc-accent, #ffb454);
+}
+.lc-set-section:first-child {
+  margin-top: 2px;
+}
+
+.lc-set-hint {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--lc-dim, #8b8b98);
+}
+
 .lc-set-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
+}
+
+.lc-set-row input[type="range"] {
+  width: 130px;
+  accent-color: var(--lc-accent, #ffb454);
+  cursor: pointer;
+}
+
+.lc-color {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.lc-reset {
+  all: unset;
+  cursor: pointer;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--lc-text, #f2f0eb);
+  background: var(--lc-line, rgba(255, 255, 255, 0.09));
+}
+.lc-reset:hover {
+  background: var(--lc-accent, #ffb454);
+  color: var(--lc-surface, #1c1c26);
 }
 
 .lc-set-label {

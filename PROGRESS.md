@@ -11,7 +11,8 @@
 | M3 | Synced lyrics panel | ✅ Done — verified by Robi 2026-07-14 |
 | M4 | Word capture + vocabulary list | ✅ Done — verified by Robi 2026-07-14 |
 | M5 | Companion app + Supabase sync | ✅ Done — verified by Robi 2026-07-14 (word saved on desktop appeared on phone) |
-| M6 | Display customization + design overhaul | 🔨 Built — awaiting verification (every setting survives reload) |
+| M6 | Display customization + design overhaul | ✅ Done — verified by Robi 2026-07-14 ("works and looks amazing") |
+| M6.5 | Product polish: movable/resizable panel, opacity, deeper personalization | 🔨 Built — awaiting verification |
 | M7 | (stretch) Phone auto-detection, publishing questions | ⬜ |
 
 ## Project structure
@@ -67,6 +68,12 @@ lyrics-companion/     (git repo, main branch — public on GitHub for Pages)
 - **Line translations:** `MeaningProvider.translateLines()` batches 12 lines per Lingva request joined with newlines (Google preserves breaks), falls back per-line on misalignment; cached per song in content.js. Verified live from Node.
 - **Blur-upcoming** is pure CSS (`.active ~ .lc-line` sibling selector) — no JS bookkeeping.
 - Vocab popup + companion app share the same tokens (popup follows theme/accent settings; companion is static dark with Google-Fonts-served Space Grotesk).
+
+## M6.5 additions (2026-07-14, Robi's "real final product" request)
+
+- Panel is **draggable** (header = drag handle, pointer capture) and **resizable** (native CSS `resize: both`, persisted via ResizeObserver, debounced). Layout stored as `settings.panel {x,y,w,h}`; `null` = default anchored spot; "Reset" button in the Layout section. Clamped back into the viewport on restore; zero-size (hidden panel) never persisted.
+- New settings: **opacity** slider 55–100% (live preview on drag, saved on release), **custom accent** via native color picker next to the swatches, **line spacing** (Compact/Cozy/Airy → `--lc-gap`), **text alignment** (left/center — hairline centers itself via `--lc-hairline-margin`).
+- Settings drawer reorganized into sections: Look / Type / Karaoke / Layout.
 
 ## Known issues / notes
 

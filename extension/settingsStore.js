@@ -9,12 +9,16 @@ const SettingsStore = (() => {
 
   const DEFAULTS = {
     theme: "dark", // dark | light
-    accent: "#FFB454", // any hex; the panel offers preset swatches
+    accent: "#FFB454", // any hex; swatches + a free color picker
+    opacity: 0.92, // panel background alpha, 0.55..1
     font: "grotesk", // grotesk | system | serif | mono
     size: "m", // s | m | l | xl
+    spacing: "cozy", // compact | cozy | airy (gap between lines)
+    align: "left", // left | center
     highlight: "glow", // glow | spotlight | classic
     showTranslations: false, // Spanish line under each English line
     blurUpcoming: false, // self-test mode: blur lines not sung yet
+    panel: null, // {x, y, w, h} once moved/resized; null = default spot
   };
 
   let cached = null;
