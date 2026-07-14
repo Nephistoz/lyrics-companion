@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<!-- companion/index.html — the phone shell.
+     Reuses the extension's provider modules via relative paths (the repo is
+     served whole, so ../extension/... resolves on GitHub Pages too). -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#121212" />
+  <title>Lyrics Vocab</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- One-time setup: Supabase values are pasted here and kept in
+       localStorage. They are never part of the (public) repo. -->
+  <section id="setup" class="screen" hidden>
+    <h1>🎵 Lyrics Vocab</h1>
+    <p>Connect to your Supabase project (values live in <code>extension/config.js</code> on your PC — this is asked only once):</p>
+    <input id="setup-url" type="url" placeholder="https://xxxx.supabase.co" autocomplete="off" />
+    <input id="setup-key" type="text" placeholder="sb_publishable_..." autocomplete="off" />
+    <button id="setup-save" class="primary">Connect</button>
+    <p id="setup-status" class="status"></p>
+  </section>
+
+  <section id="app" class="screen" hidden>
+    <nav>
+      <button id="tab-review" class="tab active">Review</button>
+      <button id="tab-search" class="tab">Search</button>
+    </nav>
+
+    <!-- Flashcards -->
+    <div id="review">
+      <p id="due-info" class="status"></p>
+      <div id="card" hidden>
+        <div id="card-word"></div>
+        <div id="card-song"></div>
+        <div id="card-back" hidden>
+          <div id="card-trans"></div>
+          <div id="card-meaning"></div>
+          <div id="card-line"></div>
+        </div>
+        <p id="card-hint" class="status">tap the card to reveal</p>
+      </div>
+      <div id="grade" hidden>
+        <button id="grade-no">✗ Didn't know</button>
+        <button id="grade-yes" class="primary">✓ Knew it</button>
+      </div>
+    </div>
+
+    <!-- Manual song search → tappable lyrics -->
+    <div id="search" hidden>
+      <input id="search-artist" type="text" placeholder="Artist" autocomplete="off" />
+      <input id="search-title" type="text" placeholder="Song title" autocomplete="off" />
+      <button id="search-go" class="primary">Find lyrics</button>
+      <p id="search-status" class="status"></p>
+      <div id="search-lyrics"></div>
+    </div>
+  </section>
+
+  <!-- Tapped-word bottom sheet -->
+  <div id="sheet" hidden>
+    <div id="sheet-word"></div>
+    <div id="sheet-trans"></div>
+    <div id="sheet-defs"></div>
+    <div class="sheet-row">
+      <button id="sheet-save" class="primary">★ Save word</button>
+      <button id="sheet-close">Close</button>
+    </div>
+  </div>
+
+  <script src="../extension/lyricsProvider.js"></script>
+  <script src="../extension/meaningProvider.js"></script>
+  <script src="../extension/syncProvider.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

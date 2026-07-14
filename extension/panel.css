@@ -1,0 +1,190 @@
+/* panel.css — injected via manifest.json into music.youtube.com.
+   Everything is prefixed lc- (Lyrics Companion) to never collide with
+   YouTube's own styles. */
+
+#lc-panel {
+  position: fixed;
+  top: 80px;    /* below YT Music's 64px top bar */
+  right: 16px;
+  bottom: 96px; /* above the 72px player bar */
+  width: 320px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  background: rgba(18, 18, 18, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  font-family: Roboto, Arial, sans-serif;
+  color: #fff;
+  overflow: hidden;
+}
+
+#lc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex: none;
+}
+
+#lc-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #aaa;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#lc-close {
+  all: unset;
+  cursor: pointer;
+  color: #aaa;
+  font-size: 14px;
+  padding: 2px 6px;
+}
+#lc-close:hover {
+  color: #fff;
+}
+
+#lc-lines {
+  position: relative; /* makes each line's offsetTop relative to this box */
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.lc-line {
+  margin: 0 0 14px;
+  font-size: 16px;
+  line-height: 1.45;
+  color: #8f8f8f;
+  transition: color 0.25s ease, transform 0.25s ease;
+  transform-origin: left center;
+}
+
+/* transform instead of font-size: scaling doesn't reflow the layout,
+   so surrounding lines never shift = no jitter. */
+.lc-line.active {
+  color: #fff;
+  font-weight: 600;
+  transform: scale(1.05);
+}
+
+.lc-static {
+  color: #cfcfcf;
+}
+
+.lc-message {
+  color: #8f8f8f;
+  font-size: 14px;
+}
+
+/* ---- M4: tappable words + meaning popup ---- */
+
+.lc-word {
+  cursor: pointer;
+  border-radius: 3px;
+}
+.lc-word:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+#lc-popup {
+  position: fixed;
+  width: 300px;
+  z-index: 10000; /* above the panel */
+  padding: 14px 16px;
+  background: #1d1d1d;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  font-family: Roboto, Arial, sans-serif;
+  color: #fff;
+}
+
+.lc-pop-word {
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: lowercase;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.lc-pop-phon {
+  font-size: 12px;
+  font-weight: 400;
+  color: #9a9a9a;
+}
+
+.lc-pop-trans {
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffd54f; /* the Spanish anchor pops first */
+}
+
+.lc-pop-def {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #cfcfcf;
+}
+
+.lc-pop-pos {
+  font-size: 11px;
+  font-style: italic;
+  color: #8f8f8f;
+}
+
+.lc-pop-status {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #9a9a9a;
+}
+
+#lc-pop-save {
+  all: unset;
+  margin-top: 12px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: #fff;
+  color: #000;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-block;
+}
+#lc-pop-save:hover {
+  background: #e6e6e6;
+}
+#lc-pop-save:disabled {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ddd;
+  cursor: default;
+}
+
+#lc-toggle {
+  all: unset;
+  position: fixed;
+  right: 16px;
+  bottom: 96px;
+  z-index: 9999;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(18, 18, 18, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 20px;
+  text-align: center;
+  line-height: 44px;
+  cursor: pointer;
+}
+#lc-toggle:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+}

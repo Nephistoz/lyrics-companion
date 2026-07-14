@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Lyrics & Vocab Companion (dev)",
+  "version": "0.5.0",
+  "description": "M5: tap lyric words on YouTube Music to translate, save, and sync them to your phone.",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "vocab.html",
+    "default_title": "My vocabulary"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["config.js", "lyricsProvider.js", "meaningProvider.js", "syncProvider.js", "vocabStore.js", "panel.js", "wordPopup.js", "content.js"],
+      "css": ["panel.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

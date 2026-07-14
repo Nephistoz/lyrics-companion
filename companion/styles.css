@@ -1,0 +1,98 @@
+/* styles.css — phone-first, dark, matching the extension's look. */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #121212;
+  color: #fff;
+  font-family: Roboto, system-ui, Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.screen { padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); max-width: 520px; margin: 0 auto; }
+
+h1 { font-size: 22px; margin: 8px 0 12px; }
+p { line-height: 1.5; }
+code { background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+
+input {
+  display: block;
+  width: 100%;
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: #1d1d1d;
+  color: #fff;
+  font-size: 15px;
+}
+input:focus { outline: none; border-color: #ffd54f; }
+
+button {
+  all: unset;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+button.primary { background: #fff; color: #000; }
+button:active { opacity: 0.75; }
+
+.status { color: #9a9a9a; font-size: 13.5px; }
+
+/* tabs */
+nav { display: flex; gap: 8px; margin-bottom: 18px; }
+.tab { flex: 1; background: rgba(255, 255, 255, 0.08); }
+.tab.active { background: #fff; color: #000; }
+
+/* flashcard */
+#card {
+  margin-top: 14px;
+  padding: 26px 20px;
+  border-radius: 16px;
+  background: #1d1d1d;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+  cursor: pointer;
+}
+#card-word { font-size: 30px; font-weight: 700; }
+#card-song { margin-top: 6px; font-size: 12.5px; color: #8f8f8f; }
+#card-back { margin-top: 18px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px; }
+#card-trans { font-size: 22px; font-weight: 600; color: #ffd54f; }
+#card-meaning { margin-top: 10px; font-size: 14px; color: #cfcfcf; line-height: 1.45; }
+#card-line { margin-top: 12px; font-size: 13px; font-style: italic; color: #9a9a9a; }
+#card-hint { margin-top: 14px; }
+
+#grade { display: flex; gap: 10px; margin-top: 16px; }
+#grade button { flex: 1; }
+#grade-no { background: rgba(255, 110, 110, 0.18); color: #ff9d9d; }
+
+/* search + lyrics */
+#search-lyrics { margin-top: 16px; padding-bottom: 40px; }
+.lyr-line { margin: 0 0 13px; font-size: 16px; line-height: 1.5; color: #d6d6d6; }
+.lyr-word { cursor: pointer; border-radius: 3px; }
+.lyr-word:active, .lyr-word:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* bottom sheet for tapped words */
+#sheet {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 100;
+  padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
+  background: #1d1d1d;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.6);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+#sheet-word { font-size: 20px; font-weight: 700; text-transform: lowercase; }
+#sheet-trans { margin-top: 4px; font-size: 17px; font-weight: 600; color: #ffd54f; }
+#sheet-defs { margin-top: 8px; font-size: 13.5px; color: #cfcfcf; line-height: 1.45; }
+.sheet-row { display: flex; gap: 10px; margin-top: 14px; }
+.sheet-row button { flex: 1; }
