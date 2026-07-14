@@ -10,8 +10,8 @@
 | M2 | Lyrics engine (LRCLIB + LRC parsing) | ✅ Done — verified by Robi 2026-07-14, 3 songs synced |
 | M3 | Synced lyrics panel | ✅ Done — verified by Robi 2026-07-14 |
 | M4 | Word capture + vocabulary list | ✅ Done — verified by Robi 2026-07-14 |
-| M5 | Companion app + Supabase sync | 🔨 Built — awaiting verification (save on desktop → review on phone) |
-| M6 | Display customization | ⬜ |
+| M5 | Companion app + Supabase sync | ✅ Done — verified by Robi 2026-07-14 (word saved on desktop appeared on phone) |
+| M6 | Display customization + design overhaul | 🔨 Built — awaiting verification (every setting survives reload) |
 | M7 | (stretch) Phone auto-detection, publishing questions | ⬜ |
 
 ## Project structure
@@ -59,6 +59,15 @@ lyrics-companion/     (git repo, main branch — public on GitHub for Pages)
 - Language pair (2026-07-14): learning **English**, native **Spanish**. Definitions = Free Dictionary API (per spec). Translation = **Lingva** (Robi's choice) with an instance list — dialectapp.org was the only healthy mirror on 2026-07-14 (lingva.ml & friends had broken upstreams) — and **MyMemory as automatic last resort**. All lookups have 4s timeouts; definition and translation fail independently.
 - Word capture details: words tokenized with apostrophe-friendly regex ("don't", "gettin'" = one word); slang "…in'" retries the dictionary with "…ing"; Google's echo-back of unknown words is discarded when the dictionary also found nothing (protects real cognates). Vocabulary list lives in the toolbar-icon popup (`action.default_popup`), newest first, with delete buttons (small extra beyond spec — needed to clean up mis-taps while testing).
 
+## M6 design system (2026-07-14)
+
+- **Tokens:** indigo-tinted charcoal dark theme (`#14141B` base — deliberately not YT's pure black) / warm-paper light theme; user accent (5 swatches, default amber `#FFB454`); Space Grotesk (OFL, 22KB latin woff2 bundled in `extension/fonts/`, loaded via `chrome-extension://__MSG_@@extension_id__/` in panel.css and web_accessible_resources). All colors flow through `--lc-*` CSS variables that `Panel.applySettings()` sets on `<body>`.
+- **Settings** (`settingsStore.js`, chrome.storage.local, live-applied): theme, accent, font (grotesk/system/serif/mono stacks), size (S/M/L/XL), highlight (Glow/Spotlight/Classic), Spanish-under-each-line, blur-upcoming self-test. Gear ⚙ in the panel header opens the drawer.
+- **Signature element:** accent hairline under the active lyric line that fills in real time as the line is sung (progress computed in content.js tick from current/next line timestamps → `--lc-progress`). Disabled in Classic mode and under `prefers-reduced-motion`.
+- **Line translations:** `MeaningProvider.translateLines()` batches 12 lines per Lingva request joined with newlines (Google preserves breaks), falls back per-line on misalignment; cached per song in content.js. Verified live from Node.
+- **Blur-upcoming** is pure CSS (`.active ~ .lc-line` sibling selector) — no JS bookkeeping.
+- Vocab popup + companion app share the same tokens (popup follows theme/accent settings; companion is static dark with Google-Fonts-served Space Grotesk).
+
 ## Known issues / notes
 
 - Artist parsing is naive: byline "Artist • Album • Year" split on the first "•". Multi-artist strings ("A & B") come through as-is — fine for lyrics search, revisit if LRCLIB matching suffers.
@@ -68,8 +77,12 @@ lyrics-companion/     (git repo, main branch — public on GitHub for Pages)
 - Lingva public mirrors are unreliable as a class (4/5 tested were down on day one). If translations stop, check `LINGVA_INSTANCES` order first; MyMemory catches total failure. DeepL (needs key + service worker) is the quality upgrade path.
 - Anonymous MyMemory has a daily character quota — only matters if Lingva is fully down for a heavy day.
 
+## Backlog (Robi's "functionality we could improve" — to collect after M6)
+
+- (pending — ask Robi to list what he noticed while testing M5 on the phone)
+
 ## Next up
 
-1. Robi pushes the repo to GitHub (public, named `lyrics-companion`), enables Pages (main / root), opens `https://<user>.github.io/lyrics-companion/` on his phone and pastes the Supabase values from `extension/config.js`.
-2. M5 "done when": a word saved on desktop appears in the phone flashcards.
-3. Then M6: settings panel (font, theme, highlight style, translation-under-line toggle, blur-upcoming self-test), all persisted.
+1. Robi verifies M6: change EVERY setting, reload the page, confirm each one survived. Try both themes, all three highlight styles, translations toggle, self-test blur.
+2. `git push` to publish the redesigned companion to GitHub Pages.
+3. Then M7 (stretch): phone auto-detection notes + the improvement backlog above.

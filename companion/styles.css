@@ -1,12 +1,22 @@
-/* styles.css — phone-first, dark, matching the extension's look. */
+/* styles.css — phone-first, matching the extension's design tokens:
+   indigo-tinted charcoal, warm off-white, amber accent, Space Grotesk. */
+
+:root {
+  --bg: #14141b;
+  --surface: #1c1c26;
+  --text: #f2f0eb;
+  --dim: #8b8b98;
+  --line: rgba(255, 255, 255, 0.09);
+  --accent: #ffb454;
+}
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: #121212;
-  color: #fff;
-  font-family: Roboto, system-ui, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -21,62 +31,64 @@ input {
   width: 100%;
   margin: 10px 0;
   padding: 12px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: #1d1d1d;
-  color: #fff;
+  background: var(--surface);
+  color: var(--text);
   font-size: 15px;
+  font-family: inherit;
 }
-input:focus { outline: none; border-color: #ffd54f; }
+input:focus { outline: none; border-color: var(--accent); }
 
 button {
   all: unset;
   padding: 12px 18px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  background: var(--line);
+  color: var(--text);
   font-size: 15px;
   font-weight: 600;
+  font-family: inherit;
   text-align: center;
   cursor: pointer;
 }
-button.primary { background: #fff; color: #000; }
+button.primary { background: var(--accent); color: #17171d; }
 button:active { opacity: 0.75; }
 
-.status { color: #9a9a9a; font-size: 13.5px; }
+.status { color: var(--dim); font-size: 13.5px; }
 
 /* tabs */
 nav { display: flex; gap: 8px; margin-bottom: 18px; }
-.tab { flex: 1; background: rgba(255, 255, 255, 0.08); }
-.tab.active { background: #fff; color: #000; }
+.tab { flex: 1; background: var(--line); }
+.tab.active { background: var(--accent); color: #17171d; }
 
 /* flashcard */
 #card {
   margin-top: 14px;
-  padding: 26px 20px;
-  border-radius: 16px;
-  background: #1d1d1d;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 28px 20px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
   text-align: center;
   cursor: pointer;
 }
-#card-word { font-size: 30px; font-weight: 700; }
-#card-song { margin-top: 6px; font-size: 12.5px; color: #8f8f8f; }
-#card-back { margin-top: 18px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px; }
-#card-trans { font-size: 22px; font-weight: 600; color: #ffd54f; }
-#card-meaning { margin-top: 10px; font-size: 14px; color: #cfcfcf; line-height: 1.45; }
-#card-line { margin-top: 12px; font-size: 13px; font-style: italic; color: #9a9a9a; }
+#card-word { font-size: 32px; font-weight: 700; letter-spacing: -0.01em; }
+#card-song { margin-top: 6px; font-size: 12.5px; color: var(--dim); }
+#card-back { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+#card-trans { font-size: 22px; font-weight: 600; color: var(--accent); }
+#card-meaning { margin-top: 10px; font-size: 14px; color: var(--text); opacity: 0.8; line-height: 1.45; }
+#card-line { margin-top: 12px; font-size: 13px; font-style: italic; color: var(--dim); }
 #card-hint { margin-top: 14px; }
 
 #grade { display: flex; gap: 10px; margin-top: 16px; }
 #grade button { flex: 1; }
-#grade-no { background: rgba(255, 110, 110, 0.18); color: #ff9d9d; }
+#grade-no { background: rgba(255, 110, 110, 0.16); color: #ff9d9d; }
 
 /* search + lyrics */
 #search-lyrics { margin-top: 16px; padding-bottom: 40px; }
-.lyr-line { margin: 0 0 13px; font-size: 16px; line-height: 1.5; color: #d6d6d6; }
+.lyr-line { margin: 0 0 13px; font-size: 16px; line-height: 1.55; color: var(--text); opacity: 0.9; }
 .lyr-word { cursor: pointer; border-radius: 3px; }
-.lyr-word:active, .lyr-word:hover { background: rgba(255, 255, 255, 0.2); }
+.lyr-word:active, .lyr-word:hover { background: rgba(255, 180, 84, 0.25); }
 
 /* bottom sheet for tapped words */
 #sheet {
@@ -84,15 +96,15 @@ nav { display: flex; gap: 8px; margin-bottom: 18px; }
   left: 0; right: 0; bottom: 0;
   z-index: 100;
   padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
-  background: #1d1d1d;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 16px 16px 0 0;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  border-radius: 18px 18px 0 0;
   box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.6);
   max-height: 60vh;
   overflow-y: auto;
 }
 #sheet-word { font-size: 20px; font-weight: 700; text-transform: lowercase; }
-#sheet-trans { margin-top: 4px; font-size: 17px; font-weight: 600; color: #ffd54f; }
-#sheet-defs { margin-top: 8px; font-size: 13.5px; color: #cfcfcf; line-height: 1.45; }
+#sheet-trans { margin-top: 4px; font-size: 17px; font-weight: 600; color: var(--accent); }
+#sheet-defs { margin-top: 8px; font-size: 13.5px; color: var(--text); opacity: 0.8; line-height: 1.45; }
 .sheet-row { display: flex; gap: 10px; margin-top: 14px; }
 .sheet-row button { flex: 1; }

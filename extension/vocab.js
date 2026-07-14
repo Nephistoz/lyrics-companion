@@ -51,8 +51,23 @@ async function render() {
   }
 }
 
+// Follow the same theme + accent the user picked in the lyrics panel.
+async function applyTheme() {
+  const s = await SettingsStore.get();
+  const r = document.documentElement.style;
+  if (s.theme === "light") {
+    r.setProperty("--bg", "#faf7f2");
+    r.setProperty("--surface", "#ffffff");
+    r.setProperty("--text", "#17171d");
+    r.setProperty("--dim", "#6e6e78");
+    r.setProperty("--line", "rgba(23, 23, 29, 0.10)");
+  }
+  r.setProperty("--accent", s.accent);
+}
+
 // Show local data instantly, then sync with the cloud and re-render.
 async function init() {
+  await applyTheme();
   await render();
   const sync = document.getElementById("sync");
   sync.textContent = "syncing…";

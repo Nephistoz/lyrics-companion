@@ -1,110 +1,268 @@
 /* panel.css — injected via manifest.json into music.youtube.com.
    Everything is prefixed lc- (Lyrics Companion) to never collide with
-   YouTube's own styles. */
+   YouTube's styles. All colors/type flow through CSS variables that
+   panel.js sets on <body> from the user's settings. */
+
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("chrome-extension://__MSG_@@extension_id__/fonts/SpaceGrotesk.woff2") format("woff2");
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+/* ---- panel frame ---- */
 
 #lc-panel {
   position: fixed;
   top: 80px;    /* below YT Music's 64px top bar */
   right: 16px;
   bottom: 96px; /* above the 72px player bar */
-  width: 320px;
+  width: 340px;
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  background: rgba(18, 18, 18, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  font-family: Roboto, Arial, sans-serif;
-  color: #fff;
+  background: var(--lc-bg, rgba(18, 18, 24, 0.92));
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  border: 1px solid var(--lc-line, rgba(255, 255, 255, 0.09));
+  border-radius: 16px;
+  box-shadow: var(--lc-shadow, 0 18px 50px rgba(0, 0, 0, 0.55));
+  font-family: var(--lc-font, "Space Grotesk", sans-serif);
+  color: var(--lc-text, #f2f0eb);
   overflow: hidden;
 }
 
 #lc-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 6px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--lc-line, rgba(255, 255, 255, 0.09));
   flex: none;
 }
 
 #lc-title {
-  font-size: 13px;
+  flex: 1;
+  font-size: 12.5px;
   font-weight: 500;
-  color: #aaa;
+  letter-spacing: 0.04em;
+  color: var(--lc-dim, #8b8b98);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+#lc-gear,
 #lc-close {
   all: unset;
   cursor: pointer;
-  color: #aaa;
+  color: var(--lc-dim, #8b8b98);
   font-size: 14px;
   padding: 2px 6px;
+  border-radius: 6px;
 }
+#lc-gear:hover,
 #lc-close:hover {
-  color: #fff;
+  color: var(--lc-text, #fff);
 }
+#lc-gear.open {
+  color: var(--lc-accent, #ffb454);
+}
+
+/* ---- lyrics ---- */
 
 #lc-lines {
   position: relative; /* makes each line's offsetTop relative to this box */
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 18px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  scrollbar-color: var(--lc-line, rgba(255, 255, 255, 0.2)) transparent;
 }
 
 .lc-line {
-  margin: 0 0 14px;
-  font-size: 16px;
-  line-height: 1.45;
-  color: #8f8f8f;
-  transition: color 0.25s ease, transform 0.25s ease;
+  margin: 0 0 15px;
+}
+
+.lc-main {
+  margin: 0;
+  font-size: var(--lc-size, 17px);
+  line-height: 1.55;
+  color: var(--lc-dim, #8b8b98);
+  transition: color 0.25s ease, transform 0.25s ease, opacity 0.25s ease, filter 0.3s ease;
   transform-origin: left center;
 }
 
-/* transform instead of font-size: scaling doesn't reflow the layout,
-   so surrounding lines never shift = no jitter. */
-.lc-line.active {
-  color: #fff;
-  font-weight: 600;
-  transform: scale(1.05);
+/* the signature: a hairline under the active line that fills in real time
+   as the line is sung (width driven by --lc-progress from playback) */
+.lc-main::after {
+  content: "";
+  display: block;
+  height: 2px;
+  width: 0;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--lc-accent, #ffb454), transparent);
+  transition: width 0.5s linear;
+}
+.lc-line.active .lc-main::after {
+  width: var(--lc-progress, 0%);
+}
+.hl-classic .lc-main::after {
+  display: none; /* classic = quiet */
 }
 
-.lc-static {
-  color: #cfcfcf;
+/* Spanish sub-lines (settings toggle adds .lc-subs on the panel) */
+.lc-sub {
+  display: none;
+  margin-top: 3px;
+  font-size: calc(var(--lc-size, 17px) * 0.78);
+  line-height: 1.4;
+  color: var(--lc-dim, #8b8b98);
+  opacity: 0.85;
+  font-style: italic;
+}
+.lc-subs .lc-sub:not(:empty) {
+  display: block;
+}
+.lc-subs .lc-line.active .lc-sub {
+  color: var(--lc-accent, #ffb454);
+  opacity: 1;
+}
+
+/* highlight style: GLOW — the line lights up in the accent */
+.hl-glow .lc-line.active .lc-main {
+  color: var(--lc-accent, #ffb454);
+  text-shadow: 0 0 26px var(--lc-accent-glow, rgba(255, 180, 84, 0.35));
+  transform: scale(1.04);
+  font-weight: 600;
+}
+
+/* highlight style: SPOTLIGHT — the room goes dark, the line stays lit */
+.hl-spotlight .lc-line:not(.active) .lc-main {
+  opacity: 0.3;
+  filter: blur(0.6px);
+}
+.hl-spotlight .lc-line.active .lc-main {
+  color: var(--lc-text, #f2f0eb);
+  transform: scale(1.04);
+  font-weight: 600;
+}
+
+/* highlight style: CLASSIC — just bold, nothing moves */
+.hl-classic .lc-line.active .lc-main {
+  color: var(--lc-text, #f2f0eb);
+  font-weight: 700;
+}
+
+/* self-test mode: lines not sung yet are blurred until they arrive */
+.lc-selftest .lc-line.active ~ .lc-line .lc-main,
+.lc-selftest .lc-line.active ~ .lc-line .lc-sub {
+  filter: blur(6px);
+}
+
+.lc-static .lc-main {
+  color: var(--lc-text, #d6d6d6);
+  opacity: 0.85;
 }
 
 .lc-message {
-  color: #8f8f8f;
+  color: var(--lc-dim, #8b8b98);
   font-size: 14px;
 }
 
-/* ---- M4: tappable words + meaning popup ---- */
-
+/* tappable words */
 .lc-word {
   cursor: pointer;
   border-radius: 3px;
 }
 .lc-word:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--lc-accent-glow, rgba(255, 255, 255, 0.18));
 }
+
+/* ---- settings drawer (covers the lyrics area) ---- */
+
+#lc-settings {
+  position: absolute;
+  top: 45px; /* under the header */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  overflow-y: auto;
+  padding: 16px 18px;
+  background: var(--lc-bg, rgba(18, 18, 24, 0.92));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.lc-set-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.lc-set-label {
+  font-size: 13px;
+  color: var(--lc-text, #f2f0eb);
+}
+
+.lc-seg {
+  display: flex;
+  gap: 6px;
+}
+
+.lc-seg button {
+  all: unset;
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--lc-dim, #8b8b98);
+  background: var(--lc-line, rgba(255, 255, 255, 0.09));
+}
+.lc-seg button.on {
+  color: var(--lc-surface, #1c1c26);
+  background: var(--lc-accent, #ffb454);
+  font-weight: 600;
+}
+
+.lc-seg .lc-swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+}
+.lc-seg .lc-swatch.on {
+  border-color: var(--lc-text, #fff);
+}
+
+.lc-set-toggle {
+  cursor: pointer;
+}
+.lc-set-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--lc-accent, #ffb454);
+  cursor: pointer;
+}
+
+/* ---- tapped-word popup ---- */
 
 #lc-popup {
   position: fixed;
   width: 300px;
   z-index: 10000; /* above the panel */
-  padding: 14px 16px;
-  background: #1d1d1d;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
-  font-family: Roboto, Arial, sans-serif;
-  color: #fff;
+  padding: 15px 17px;
+  background: var(--lc-surface, #1d1d26);
+  border: 1px solid var(--lc-line, rgba(255, 255, 255, 0.14));
+  border-radius: 14px;
+  box-shadow: var(--lc-shadow, 0 8px 28px rgba(0, 0, 0, 0.55));
+  font-family: var(--lc-font, "Space Grotesk", sans-serif);
+  color: var(--lc-text, #f2f0eb);
 }
 
 .lc-pop-word {
@@ -119,55 +277,57 @@
 .lc-pop-phon {
   font-size: 12px;
   font-weight: 400;
-  color: #9a9a9a;
+  color: var(--lc-dim, #9a9a9a);
 }
 
 .lc-pop-trans {
   margin-top: 6px;
   font-size: 16px;
   font-weight: 600;
-  color: #ffd54f; /* the Spanish anchor pops first */
+  color: var(--lc-accent, #ffb454);
 }
 
 .lc-pop-def {
   margin-top: 8px;
   font-size: 13px;
   line-height: 1.4;
-  color: #cfcfcf;
+  color: var(--lc-text, #cfcfcf);
+  opacity: 0.85;
 }
 
 .lc-pop-pos {
   font-size: 11px;
   font-style: italic;
-  color: #8f8f8f;
+  color: var(--lc-dim, #8f8f8f);
 }
 
 .lc-pop-status {
   margin-top: 6px;
   font-size: 13px;
-  color: #9a9a9a;
+  color: var(--lc-dim, #9a9a9a);
 }
 
 #lc-pop-save {
   all: unset;
   margin-top: 12px;
-  padding: 7px 14px;
+  padding: 8px 15px;
   border-radius: 999px;
-  background: #fff;
-  color: #000;
+  background: var(--lc-accent, #ffb454);
+  color: var(--lc-surface, #17171d);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   display: inline-block;
 }
 #lc-pop-save:hover {
-  background: #e6e6e6;
+  filter: brightness(1.1);
 }
 #lc-pop-save:disabled {
-  background: rgba(255, 255, 255, 0.25);
-  color: #ddd;
+  opacity: 0.55;
   cursor: default;
 }
+
+/* ---- floating reopen button ---- */
 
 #lc-toggle {
   all: unset;
@@ -175,16 +335,34 @@
   right: 16px;
   bottom: 96px;
   z-index: 9999;
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
-  background: rgba(18, 18, 18, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--lc-bg, rgba(18, 18, 24, 0.92));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--lc-line, rgba(255, 255, 255, 0.12));
   font-size: 20px;
   text-align: center;
-  line-height: 44px;
+  line-height: 46px;
   cursor: pointer;
 }
 #lc-toggle:hover {
-  border-color: rgba(255, 255, 255, 0.35);
+  border-color: var(--lc-accent, #ffb454);
+}
+
+/* ---- accessibility ---- */
+
+#lc-panel button:focus-visible,
+#lc-popup button:focus-visible,
+#lc-toggle:focus-visible {
+  outline: 2px solid var(--lc-accent, #ffb454);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lc-main,
+  .lc-main::after {
+    transition: none;
+  }
 }

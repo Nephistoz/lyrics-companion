@@ -52,6 +52,10 @@ let lastArtist = null;
 let fetchId = 0; // increments per song; stale fetch responses get ignored
 let lines = null; // current song's synced lyrics: [{time, text}]
 let lineIndex = -1; // index of the last line we logged
+let settings = null; // current display settings (SettingsStore)
+let translationsFor = null; // songKey the cached line translations belong to
+let translationsCache = null;
+let translating = false;
 
 // async/await: getLyrics talks to the network, which takes time. "await"
 // pauses THIS function (nothing else) until the answer arrives.
@@ -73,6 +77,7 @@ async function onSongChange(title, artist, duration) {
       lines = result.synced;
       console.log(`${LOG} Synced lyrics loaded: ${lines.length} lines (matched "${result.matched}").`);
       Panel.showSynced(lines, result.matched);
+      maybeLoadTranslations();
     } else {
       Panel.showPlain(result.plain, result.matched);
     }
@@ -111,11 +116,41 @@ function tick() {
 
   // Update the highlight even while paused — seeking works either way.
   if (lines) {
-    const idx = currentLineIndex(video.currentTime);
+    const t = video.currentTime;
+    const idx = currentLineIndex(t);
     if (idx !== lineIndex) {
       lineIndex = idx;
       Panel.setActiveLine(idx);
     }
+    // How far into the current line we are → the filling hairline.
+    if (idx >= 0 && lines[idx + 1]) {
+      const frac = (t - lines[idx].time) / (lines[idx + 1].time - lines[idx].time);
+      Panel.setActiveProgress(Math.min(1, Math.max(0, frac)));
+    }
+  }
+}
+
+// "Spanish under each line": translate the whole song once per song, cache
+// it, and hand it to the panel. Only runs while the toggle is on.
+async function maybeLoadTranslations() {
+  if (!settings || !settings.showTranslations || !lines || translating) return;
+  const key = lastSongKey;
+  if (translationsFor === key && translationsCache) {
+    Panel.setTranslations(translationsCache);
+    return;
+  }
+  translating = true;
+  try {
+    const texts = await MeaningProvider.translateLines(lines.map((l) => l.text));
+    if (key === lastSongKey && lines) {
+      translationsFor = key;
+      translationsCache = texts;
+      Panel.setTranslations(texts);
+    }
+  } catch (err) {
+    console.warn(`${LOG} line translations failed:`, err.message);
+  } finally {
+    translating = false;
   }
 }
 
@@ -125,6 +160,20 @@ Panel.onWordClick(({ word, line, rect }) => {
   WordPopup.show({ word, line, rect, songTitle: lastTitle, artist: lastArtist });
 });
 WordPopup.onOpenChange((open) => Panel.setScrollPaused(open));
+
+// Settings drive the panel's whole look. Load once at startup, then keep
+// panel and storage in sync both ways.
+SettingsStore.get().then((s) => {
+  settings = s;
+  Panel.applySettings(s);
+});
+SettingsStore.onChange((s) => {
+  const translationsJustEnabled = !settings?.showTranslations && s.showTranslations;
+  settings = s;
+  Panel.applySettings(s);
+  if (translationsJustEnabled) maybeLoadTranslations();
+});
+Panel.onSettingsChange((patch) => SettingsStore.set(patch));
 
 console.log(`${LOG} content script loaded — play a song and watch this console.`);
 setInterval(tick, 500);

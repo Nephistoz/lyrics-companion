@@ -76,6 +76,31 @@ const MeaningProvider = (() => {
     }
   }
 
+  // Translate a whole song's lines for the "Spanish under each line" mode.
+  // Lines are batched a dozen at a time joined with newlines (Google keeps
+  // line breaks) — far fewer requests than one per line. Any batch that
+  // comes back misaligned falls back to line-by-line for that batch only.
+  async function translateLines(lines) {
+    const out = new Array(lines.length).fill("");
+    const BATCH = 12;
+    for (let i = 0; i < lines.length; i += BATCH) {
+      const batch = lines.slice(i, i + BATCH);
+      const joined = batch.map((l) => l || "…").join("\n");
+      const translated = await fetchTranslation(joined);
+      const parts = translated ? translated.split("\n") : null;
+      if (parts && parts.length === batch.length) {
+        parts.forEach((p, j) => {
+          if (batch[j]) out[i + j] = p.trim();
+        });
+      } else {
+        for (let j = 0; j < batch.length; j++) {
+          if (batch[j]) out[i + j] = (await fetchTranslation(batch[j])) || "";
+        }
+      }
+    }
+    return out;
+  }
+
   // The one public entry point. Definition and translation fly in parallel
   // and fail independently — a popup with only one of them is still useful.
   async function lookup(rawWord) {
@@ -97,5 +122,5 @@ const MeaningProvider = (() => {
     };
   }
 
-  return { lookup };
+  return { lookup, translateLines };
 })();
