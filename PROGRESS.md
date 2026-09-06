@@ -13,7 +13,8 @@
 | M5 | Companion app + Supabase sync | ✅ Done — verified by Robi 2026-07-14 (word saved on desktop appeared on phone) |
 | M6 | Display customization + design overhaul | ✅ Done — verified by Robi 2026-07-14 ("works and looks amazing") |
 | M6.5 | Product polish: movable/resizable panel, opacity, deeper personalization | ✅ Done — verified by Robi 2026-07-14 |
-| M6.6 | Lyric sync drift: root-cause fixes + per-song manual nudge | 🔨 Built — awaiting verification |
+| M6.6 | Lyric sync drift: root-cause fixes + per-song manual nudge | ✅ Partly — helped, but transitions still broke (see M6.7) |
+| M6.7 | Track-change desync: clock/media identity guards | 🔨 Built — awaiting verification |
 | M7 | (stretch) Phone auto-detection, publishing questions | ⬜ |
 
 ## Project structure
@@ -85,6 +86,16 @@ Robi reported intermittent lyric/song drift. Evidence gathered from live LRCLIB 
 3. **Video versions have intros** the album-timed LRC knows nothing about — a constant per-song shift no algorithm can infer. Hence the manual nudge, persisted per song in `offsetStore.js`, so a song only ever needs fixing once.
 
 Also: `[offset:±ms]` LRC tags are now honoured (rare on LRCLIB — 0 of 20 sampled — but valid LRC), a drift warning surfaces in the sync bar when even the closest match is >15s off, and the highlight moved from the 500ms tick to a `requestAnimationFrame` loop (frame-accurate lines; progress hairline throttled to ~10Hz). Regression tests: `scratchpad/test-sync.js` (offset tag, closest-duration pick, mismatch reporting) — all green.
+
+## M6.7 track-change desync (2026-07-14)
+
+M6.6's fixes helped but Robi hit the real one: **at a song transition the new song's lyrics load while the `<video>` is still playing out the previous track**, so `currentTime` (~4:50) lights a line from the middle of the incoming lyrics and scrolls on from there. M6.6 gated the *fetch* on media metadata; it never gated the *clock* the render loop reads.
+
+Fixes:
+- **Clock guard (the real fix).** `render()` refuses to highlight while `|video.duration − fetchedDuration| > 2s` — i.e. while the media currently loaded is not the one the lyrics were fetched for. Logs "holding highlight" once per hold. detect()'s existing refetch resolves the hold within 500ms.
+- **Stronger fetch gate.** A song change now also waits for `currentTime < 5s` (a clock genuinely back at the start of a track); timeout raised 2s → 10s since the wait is now safe, and first-detection-on-page-load fetches immediately.
+- **`pickVideo()`** returns the `<video>` that is actually playing rather than the first in the DOM (YouTube keeps several around for the song/video toggle and preloading).
+- **Transition diagnostics:** each song change logs `len= at= videos= via=` (which condition released the fetch: first/metadata/restart/timeout) — paste these if the bug ever reappears.
 
 ## Known issues / notes
 

@@ -61,7 +61,7 @@ let translationsFor = null; // songKey the cached line translations belong to
 let translationsCache = null;
 let translating = false;
 
-let videoEl = null; // the page's <video>, cached for the render loop
+let videoEl = null; // the page's playing <video>, cached for the render loop
 let hookedVideo = null; // the element we attached metadata listeners to
 let metadataStamp = 0; // when the <video> last reported a fresh duration
 let pendingSince = 0; // when the current song's title first appeared
@@ -69,6 +69,7 @@ let fetchedDuration = 0; // the duration the current lyrics were matched against
 let syncOffset = 0; // this song's manual timing nudge, in seconds
 let driftHint = ""; // why the timing may be off (shown in the sync bar)
 let lastProgressAt = 0;
+let holdLogged = false; // keeps the "holding highlight" note to once per hold
 
 // async/await: getLyrics talks to the network, which takes time. "await"
 // pauses THIS function (nothing else) until the answer arrives.
@@ -129,10 +130,19 @@ function hookVideo(video) {
   video.addEventListener("loadedmetadata", stamp);
 }
 
+// YouTube sometimes keeps more than one <video> around (the video/song
+// toggle, preloading). The element that is actually playing owns the clock
+// our lyrics follow — taking the first one in the DOM can pick a stale player.
+function pickVideo() {
+  const all = document.querySelectorAll("video");
+  if (all.length < 2) return all[0] || null;
+  return [...all].find((v) => !v.paused && Number.isFinite(v.duration)) || all[0];
+}
+
 function detect() {
-  // YT Music is a single-page app: one persistent <video> element plays
-  // everything. Its currentTime/duration properties are live and cheap to read.
-  const video = document.querySelector("video");
+  // YT Music is a single-page app: the <video> element's currentTime and
+  // duration are live and cheap to read.
+  const video = pickVideo();
   const title = readTitle();
   const artist = readArtist();
   if (!video || !title) return;
@@ -141,22 +151,26 @@ function detect() {
 
   const songKey = `${title}|${artist}`;
   if (songKey !== lastSongKey) {
-    // The player-bar title and the <video> duration do NOT update at the same
-    // instant. Fetching inside that gap sends the PREVIOUS song's length to
-    // LRCLIB, which then matches a different version of the song — lyrics that
-    // look fine at first and drift later. So on a new title: drop the old
-    // lyrics immediately (they belong to another timeline), then wait for a
-    // duration that belongs to THIS song — a metadata event around the title
-    // change — or stop waiting after 2s and use what we have.
+    // The player-bar title and the <video> itself do NOT switch tracks at the
+    // same instant. Fetching inside that gap sends the PREVIOUS song's length
+    // to LRCLIB, which then matches a different version — lyrics that look
+    // fine at first and drift later. So on a new title: drop the old lyrics
+    // immediately (they belong to another timeline), then wait for proof that
+    // the player has moved on too — a metadata event, or a clock back at the
+    // start of a track — before fetching.
     if (!pendingSince) {
       pendingSince = Date.now();
       lines = null;
       lineIndex = -1;
       Panel.showMessage("Searching lyrics…", title);
     }
+    const firstEver = lastSongKey === null; // page load: media is already correct
     const metadataFresh = metadataStamp >= pendingSince - 2000;
-    const waitedLongEnough = Date.now() - pendingSince > 2000;
-    if (Number.isFinite(video.duration) && (metadataFresh || waitedLongEnough)) {
+    const restarted = video.currentTime < 5; // the new track is at its beginning
+    const gaveUp = Date.now() - pendingSince > 10000;
+    if (Number.isFinite(video.duration) && (firstEver || metadataFresh || restarted || gaveUp)) {
+      const via = firstEver ? "first" : metadataFresh ? "metadata" : restarted ? "restart" : "timeout";
+      console.log(`${LOG} → "${title}" len=${Math.round(video.duration)}s at=${video.currentTime.toFixed(1)}s videos=${document.querySelectorAll("video").length} via=${via}`);
       lastSongKey = songKey;
       lastTitle = title;
       lastArtist = artist;
@@ -192,6 +206,24 @@ function currentLineIndex(t) {
 function render() {
   requestAnimationFrame(render);
   if (!lines || !videoEl) return;
+
+  // The clock only means something when the media loaded RIGHT NOW is the one
+  // these lyrics were fetched for. At a track change the previous song can
+  // still be playing out its last seconds while the next song's lyrics arrive
+  // — following that clock lights a line from the middle of the song and then
+  // scrolls on from there. Hold the highlight until the timelines agree;
+  // detect() refetches within 500ms if the track really did change.
+  if (
+    fetchedDuration && Number.isFinite(videoEl.duration) &&
+    Math.abs(videoEl.duration - fetchedDuration) > 2
+  ) {
+    if (!holdLogged) {
+      holdLogged = true;
+      console.log(`${LOG} holding highlight: player is on a ${Math.round(videoEl.duration)}s track, lyrics are for a ${Math.round(fetchedDuration)}s one`);
+    }
+    return;
+  }
+  holdLogged = false;
 
   const t = videoEl.currentTime - syncOffset;
   const idx = currentLineIndex(t);
