@@ -29,14 +29,21 @@ const LyricsProvider = (() => {
   }
 
   // LRC format is plain text, one line per lyric: "[mm:ss.xx] the words".
-  // Parse into [{time: seconds, text}] sorted by time.
+  // Parse into [{time: seconds, text}] sorted by time. An "[offset:±ms]" tag
+  // shifts every timestamp (positive = lyrics land earlier), so honour it.
   // (Rare LRC files put several timestamps on one line — not handled yet.)
   function parseLrc(lrc) {
     const lines = [];
+    let offset = 0;
     for (const raw of lrc.split("\n")) {
+      const off = raw.match(/^\[offset:\s*([+-]?\d+)\s*\]/i);
+      if (off) {
+        offset = Number(off[1]) / 1000;
+        continue;
+      }
       const m = raw.match(/^\[(\d+):(\d+(?:\.\d+)?)\](.*)$/);
       if (!m) continue;
-      lines.push({ time: Number(m[1]) * 60 + Number(m[2]), text: m[3].trim() });
+      lines.push({ time: Number(m[1]) * 60 + Number(m[2]) - offset, text: m[3].trim() });
     }
     return lines.sort((a, b) => a.time - b.time);
   }
@@ -48,18 +55,19 @@ const LyricsProvider = (() => {
     return res.json();
   }
 
-  // From a list of search results, prefer: synced lyrics with a duration
-  // close to ours > any synced > plain lyrics close in duration > anything.
+  // Same song, several uploads: LRCLIB often carries versions whose lengths
+  // differ by a minute (radio edit vs extended vs live). Choosing one that is
+  // not the length of the track being played is exactly what makes lyrics
+  // drift, so always take the CLOSEST duration — never just the first synced
+  // hit. With no duration to compare against, the API's own order is kept.
   function pickBest(results, duration) {
     if (!results || results.length === 0) return null;
-    const near = (r) =>
-      !Number.isFinite(duration) || !r.duration || Math.abs(r.duration - duration) <= 10;
-    return (
-      results.find((r) => r.syncedLyrics && near(r)) ||
-      results.find((r) => r.syncedLyrics) ||
-      results.find((r) => r.plainLyrics && near(r)) ||
-      results[0]
-    );
+    const gap = (r) =>
+      Number.isFinite(duration) && r.duration ? Math.abs(r.duration - duration) : Infinity;
+    const byGap = (a, b) => gap(a) - gap(b);
+    const synced = results.filter((r) => r.syncedLyrics).sort(byGap);
+    if (synced.length) return synced[0];
+    return results.filter((r) => r.plainLyrics).sort(byGap)[0] || results[0];
   }
 
   // The one public entry point.
@@ -87,10 +95,18 @@ const LyricsProvider = (() => {
     if (hit.instrumental) return { instrumental: true };
     if (!hit.syncedLyrics && !hit.plainLyrics) return null;
 
+    const matchedDuration = hit.duration || null;
     return {
       synced: hit.syncedLyrics ? parseLrc(hit.syncedLyrics) : null,
       plain: hit.plainLyrics || null,
       matched: `${hit.trackName} — ${hit.artistName}`,
+      matchedDuration,
+      // Timings are only trustworthy when the matched upload is about as long
+      // as what is playing; past ~15s apart the lyrics drift as the song runs.
+      durationMismatch:
+        Number.isFinite(duration) && matchedDuration
+          ? Math.abs(matchedDuration - duration) > 15
+          : false,
     };
   }
 

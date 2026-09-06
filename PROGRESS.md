@@ -12,7 +12,8 @@
 | M4 | Word capture + vocabulary list | ✅ Done — verified by Robi 2026-07-14 |
 | M5 | Companion app + Supabase sync | ✅ Done — verified by Robi 2026-07-14 (word saved on desktop appeared on phone) |
 | M6 | Display customization + design overhaul | ✅ Done — verified by Robi 2026-07-14 ("works and looks amazing") |
-| M6.5 | Product polish: movable/resizable panel, opacity, deeper personalization | 🔨 Built — awaiting verification |
+| M6.5 | Product polish: movable/resizable panel, opacity, deeper personalization | ✅ Done — verified by Robi 2026-07-14 |
+| M6.6 | Lyric sync drift: root-cause fixes + per-song manual nudge | 🔨 Built — awaiting verification |
 | M7 | (stretch) Phone auto-detection, publishing questions | ⬜ |
 
 ## Project structure
@@ -75,12 +76,21 @@ lyrics-companion/     (git repo, main branch — public on GitHub for Pages)
 - New settings: **opacity** slider 55–100% (live preview on drag, saved on release), **custom accent** via native color picker next to the swatches, **line spacing** (Compact/Cozy/Airy → `--lc-gap`), **text alignment** (left/center — hairline centers itself via `--lc-hairline-margin`).
 - Settings drawer reorganized into sections: Look / Type / Karaoke / Layout.
 
+## M6.6 sync-drift investigation (2026-07-14)
+
+Robi reported intermittent lyric/song drift. Evidence gathered from live LRCLIB queries — three independent causes, all fixed:
+
+1. **Multiple versions per song.** LRCLIB hosts uploads of the same track with very different lengths ("Believed — Lauv": 170s / 181s / 229s; "Where You Are": 221s / 236s / 282s; "Wings" is tight at 250–251s, which is why some songs never drifted). Old `pickBest` fell back to *any* synced hit when none was within 10s → a 282s file over a 236s track drifts progressively. Now picks the **closest duration**, always.
+2. **Song-change race.** The player-bar title and the `<video>` duration update at different instants, so a fetch in that gap used the PREVIOUS song's length → 404 on `/api/get` → search fallback → wrong version. `detect()` now waits for a `durationchange`/`loadedmetadata` event belonging to the new song (2s cap), clears stale lyrics the moment the title changes, and refetches if YouTube later revises the length by >2s (defense in depth).
+3. **Video versions have intros** the album-timed LRC knows nothing about — a constant per-song shift no algorithm can infer. Hence the manual nudge, persisted per song in `offsetStore.js`, so a song only ever needs fixing once.
+
+Also: `[offset:±ms]` LRC tags are now honoured (rare on LRCLIB — 0 of 20 sampled — but valid LRC), a drift warning surfaces in the sync bar when even the closest match is >15s off, and the highlight moved from the 500ms tick to a `requestAnimationFrame` loop (frame-accurate lines; progress hairline throttled to ~10Hz). Regression tests: `scratchpad/test-sync.js` (offset tag, closest-duration pick, mismatch reporting) — all green.
+
 ## Known issues / notes
 
 - Artist parsing is naive: byline "Artist • Album • Year" split on the first "•". Multi-artist strings ("A & B") come through as-is — fine for lyrics search, revisit if LRCLIB matching suffers.
 - LRC parser handles one timestamp per line only (rare multi-timestamp LRC lines are skipped per-tag) — fine for LRCLIB content.
 - On song change the previous song's `duration` can be read for a moment; the search fallback absorbs the occasional bad exact-match. Watch for wrong-lyrics reports.
-- Highlight can lag up to ~0.5s (tick interval) — acceptable so far.
 - Lingva public mirrors are unreliable as a class (4/5 tested were down on day one). If translations stop, check `LINGVA_INSTANCES` order first; MyMemory catches total failure. DeepL (needs key + service worker) is the quality upgrade path.
 - Anonymous MyMemory has a daily character quota — only matters if Lingva is fully down for a heavy day.
 

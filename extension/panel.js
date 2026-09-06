@@ -18,6 +18,7 @@ const Panel = (() => {
   let scrollPaused = false; // pause auto-centering while the word popup is open
   let wordClickHandler = null; // content.js wires this to the word popup
   let settingsChangeHandler = null; // content.js wires this to SettingsStore
+  let syncNudgeHandler = null; // content.js wires this to the per-song offset
   let lastSettings = null;
   let dragging = null; // {dx, dy} while the header is being dragged
   let suppressResize = false; // ignore ResizeObserver events we caused
@@ -74,6 +75,11 @@ const Panel = (() => {
         <button id="lc-close" title="Hide lyrics">✕</button>
       </div>
       <div id="lc-lines"></div>
+      <div id="lc-sync" hidden>
+        <button id="lc-sync-earlier" title="Shift lyrics 0.25s earlier">− earlier</button>
+        <button id="lc-sync-value" title="Timing looks right">In sync</button>
+        <button id="lc-sync-later" title="Shift lyrics 0.25s later">later +</button>
+      </div>
       <div id="lc-settings" hidden></div>`;
     document.body.appendChild(root);
     linesEl = root.querySelector("#lc-lines");
@@ -114,7 +120,36 @@ const Panel = (() => {
       }
     });
 
+    root.querySelector("#lc-sync-earlier").addEventListener("click", () => nudge(-0.25));
+    root.querySelector("#lc-sync-later").addEventListener("click", () => nudge(0.25));
+    root.querySelector("#lc-sync-value").addEventListener("click", () => nudge(null));
+
     buildDragAndResize();
+  }
+
+  /* ---- sync bar: nudge this song's lyrics earlier or later ---- */
+
+  function nudge(delta) {
+    if (syncNudgeHandler) syncNudgeHandler(delta); // null = back to zero
+  }
+
+  function showSyncBar(show) {
+    ensureBuilt();
+    root.querySelector("#lc-sync").hidden = !show;
+  }
+
+  // offset: seconds the lyrics are shifted by. hint: why the timing may be
+  // off (empty when the match looks trustworthy).
+  function setSyncState(offset, hint) {
+    ensureBuilt();
+    const bar = root.querySelector("#lc-sync");
+    const value = root.querySelector("#lc-sync-value");
+    value.textContent = offset
+      ? `${offset > 0 ? "+" : "−"}${Math.abs(offset).toFixed(2)}s`
+      : hint ? "check timing" : "In sync";
+    value.title = [hint, offset ? "Click to reset the timing" : ""].filter(Boolean).join(" ") ||
+      "Timing looks right";
+    bar.classList.toggle("warn", !!hint || !!offset);
   }
 
   /* ---- move & resize, persisted through settings.panel ---- */
@@ -416,6 +451,7 @@ const Panel = (() => {
   // Status text: "Searching…", "No lyrics found", "Instrumental"...
   function showMessage(msg, header = "Lyrics") {
     reset(header);
+    showSyncBar(false);
     const p = document.createElement("p");
     p.className = "lc-message";
     p.textContent = msg;
@@ -424,6 +460,7 @@ const Panel = (() => {
 
   function showSynced(lines, header) {
     reset(header);
+    showSyncBar(true);
     for (const line of lines) {
       const el = buildLine(line.text, false);
       linesEl.appendChild(el);
@@ -433,6 +470,7 @@ const Panel = (() => {
 
   function showPlain(text, header) {
     reset(`${header} (not synced)`);
+    showSyncBar(false);
     for (const row of text.split("\n")) {
       linesEl.appendChild(buildLine(row, true));
     }
@@ -490,9 +528,14 @@ const Panel = (() => {
     settingsChangeHandler = fn;
   }
 
+  function onSyncNudge(fn) {
+    syncNudgeHandler = fn;
+  }
+
   return {
     showMessage, showSynced, showPlain, setTranslations,
     setActiveLine, setActiveProgress, setOpen, setScrollPaused,
     applySettings, onWordClick, onSettingsChange,
+    setSyncState, onSyncNudge,
   };
 })();

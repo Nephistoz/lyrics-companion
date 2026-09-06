@@ -114,7 +114,7 @@
   margin: 5px var(--lc-hairline-margin, 0) 0;
   border-radius: 2px;
   background: linear-gradient(90deg, var(--lc-accent, #ffb454), transparent);
-  transition: width 0.5s linear;
+  transition: width 0.12s linear;
 }
 .lc-line.active .lc-main::after {
   width: var(--lc-progress, 0%);
@@ -190,6 +190,40 @@
 }
 .lc-word:hover {
   background: var(--lc-accent-glow, rgba(255, 255, 255, 0.18));
+}
+
+/* ---- sync bar: nudge a song's lyrics earlier or later ---- */
+
+#lc-sync {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  padding: 8px 12px;
+  border-top: 1px solid var(--lc-line, rgba(255, 255, 255, 0.09));
+}
+
+#lc-sync button {
+  all: unset;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--lc-dim, #8b8b98);
+  background: var(--lc-line, rgba(255, 255, 255, 0.09));
+}
+#lc-sync button:hover {
+  color: var(--lc-text, #f2f0eb);
+}
+
+#lc-sync-value {
+  flex: 1;
+  text-align: center;
+  background: none !important;
+  font-variant-numeric: tabular-nums;
+}
+#lc-sync.warn #lc-sync-value {
+  color: var(--lc-accent, #ffb454);
 }
 
 /* ---- settings drawer (covers the lyrics area) ---- */
