@@ -71,14 +71,22 @@ let driftHint = ""; // why the timing may be off (shown in the sync bar)
 let fitSuggestion = 0; // seconds of padding the sync bar offers to correct
 let lastProgressAt = 0;
 let holdLogged = false; // keeps the "holding highlight" note to once per hold
+let awaitingStart = false; // new song loaded: has its clock actually started?
+let holdSince = 0;
+let lastClock = 0; // previous frame's currentTime, so restarts are visible
 
 // async/await: getLyrics talks to the network, which takes time. "await"
 // pauses THIS function (nothing else) until the answer arrives.
-async function onSongChange(title, artist, duration) {
+async function onSongChange(title, artist, duration, expectStart = true) {
   lines = null;
   lineIndex = -1;
   fetchedDuration = duration;
   driftHint = "";
+  // A track that just changed must prove its clock before the lyrics follow
+  // it (see render). Lyrics loaded for whatever is already playing at page
+  // load get no such wait — that clock is mid-song by definition.
+  awaitingStart = expectStart;
+  holdSince = Date.now();
   WordPopup.hide(); // a popup from the previous song makes no sense now
   const id = ++fetchId;
   console.log(`${LOG} Song changed → ${title} — ${artist} (${formatTime(duration)}) — fetching lyrics…`);
@@ -192,7 +200,7 @@ function detect() {
       lastTitle = title;
       lastArtist = artist;
       pendingSince = 0;
-      onSongChange(title, artist, video.duration);
+      onSongChange(title, artist, video.duration, !firstEver);
     }
     return;
   }
@@ -224,25 +232,46 @@ function render() {
   requestAnimationFrame(render);
   if (!lines || !videoEl) return;
 
-  // The clock only means something when the media loaded RIGHT NOW is the one
-  // these lyrics were fetched for. At a track change the previous song can
-  // still be playing out its last seconds while the next song's lyrics arrive
-  // — following that clock lights a line from the middle of the song and then
-  // scrolls on from there. Hold the highlight until the timelines agree;
-  // detect() refetches within 500ms if the track really did change.
+  const clock = videoEl.currentTime;
+
+  // THE RULE: never follow a clock we haven't seen start.
+  //
+  // When a track changes, the incoming song's lyrics can be ready while the
+  // player is still reporting the outgoing song's position — a clock reading
+  // 4:12 against fresh lyrics lights a line from the middle of the song and
+  // carries on from there. Predicting when YouTube swaps its internals turned
+  // out to be unreliable (durations and titles update at their own pace), so
+  // the lyrics simply wait for proof: a clock near the start of a track, or
+  // one that jumped backwards. Until then the lyrics are readable, just not
+  // highlighted. The 30s escape covers someone seeking deep into a song
+  // before its opening ever played.
+  if (awaitingStart) {
+    const restarted = clock < 5 || clock < lastClock - 1;
+    const waitedTooLong = Date.now() - holdSince > 30000;
+    lastClock = clock;
+    if (!restarted && !waitedTooLong) {
+      if (!holdLogged) {
+        holdLogged = true;
+        console.log(`${LOG} holding highlight: clock reads ${clock.toFixed(1)}s, waiting for this track to start`);
+      }
+      return;
+    }
+    awaitingStart = false;
+    holdLogged = false;
+    console.log(`${LOG} following the clock from ${clock.toFixed(1)}s (${restarted ? "track started" : "waited 30s"})`);
+  }
+  lastClock = clock;
+
+  // Second guard: the loaded media should also be the one these lyrics were
+  // fetched for. detect() refetches within 500ms when it isn't.
   if (
     fetchedDuration && Number.isFinite(videoEl.duration) &&
     Math.abs(videoEl.duration - fetchedDuration) > 2
   ) {
-    if (!holdLogged) {
-      holdLogged = true;
-      console.log(`${LOG} holding highlight: player is on a ${Math.round(videoEl.duration)}s track, lyrics are for a ${Math.round(fetchedDuration)}s one`);
-    }
     return;
   }
-  holdLogged = false;
 
-  const t = videoEl.currentTime - syncOffset;
+  const t = clock - syncOffset;
   const idx = currentLineIndex(t);
   if (idx !== lineIndex) {
     lineIndex = idx;

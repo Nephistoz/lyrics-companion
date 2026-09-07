@@ -16,6 +16,7 @@
 | M6.6 | Lyric sync drift: root-cause fixes + per-song manual nudge | ✅ Partly — helped, but transitions still broke (see M6.7) |
 | M6.7 | Track-change desync: clock/media identity guards | 🔨 Built — awaiting verification |
 | M6.8 | Padded versions (video/extended edits): one-click Align | 🔨 Built — awaiting verification |
+| M6.9 | Track-change desync, actually fixed: the clock-start invariant + tests | 🔨 Built — covered by tests/track-change.test.js |
 | M7 | (stretch) Phone auto-detection, publishing questions | ⬜ |
 
 ## Project structure
@@ -26,6 +27,7 @@ lyrics-companion/     (git repo, main branch — public on GitHub for Pages)
 ├── README.md
 ├── companion/        ← M5: phone app (flashcards + search), reuses ../extension modules
 │   ├── index.html / styles.css / app.js
+├── tests/            ← plain-node regression tests (no deps): lyrics matching + track changes
 ├── CLAUDE.md      ← master prompt / spec (decisions, milestones)
 ├── PROGRESS.md    ← this file
 └── extension/            ← Chrome extension (load this folder unpacked)
@@ -106,6 +108,16 @@ Console evidence from Robi: three drift warnings in a row, all in the same direc
 - Nudge protocol now carries three shapes: `delta` (± button), `null` (reset), `{set}` (align).
 - Drift notices moved from `console.warn` to `console.log` — they were cluttering the error console, and they are information, not faults.
 - `pickVideo()` now prefers the `<video>` inside YT Music's own player (`ytmusic-player`, `#movie_player`, `.html5-main-video`) before falling back to "whichever is playing" — home-page preview videos were a real risk of reading the wrong clock.
+
+## M6.9 the clock-start invariant (2026-07-14) — read this before touching sync
+
+Robi's screenshot: player at **0:02 of a 7:56 track**, highlight deep mid-song, sync bar "In sync" (so the lyrics matched the track fine). Words right, position wrong — the render loop was following a clock that still belonged to the song that had just ended.
+
+Three earlier attempts failed because each tried to *predict* when YouTube swaps its internals (title timing in M6.6, duration equality in M6.7, version padding in M6.8). Durations and titles update on their own schedules, so at a transition the duration could already match the new track while `currentTime` still trailed the old one — every heuristic waved it through.
+
+**The fix is an invariant, not a heuristic: never follow a clock we have not seen start.** When a track changes, the lyrics hold (visible, unhighlighted) until the clock proves itself — reading under 5s, or jumping backwards. Landing mid-song right after a change is then structurally impossible, whatever YouTube does internally. Page-load lyrics skip the wait (that clock is mid-song by definition, `expectStart=false`), and a 30s escape covers someone seeking deep into a track before its opening ever played.
+
+Covered by `tests/track-change.test.js`, which runs the real `content.js` in a sandbox against a scripted clock — including the exact 460s-clock-with-fresh-lyrics case. **Run both tests before changing sync code.**
 
 ## Known issues / notes
 
