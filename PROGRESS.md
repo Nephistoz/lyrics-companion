@@ -16,7 +16,8 @@
 | M6.6 | Lyric sync drift: root-cause fixes + per-song manual nudge | ✅ Partly — helped, but transitions still broke (see M6.7) |
 | M6.7 | Track-change desync: clock/media identity guards | 🔨 Built — awaiting verification |
 | M6.8 | Padded versions (video/extended edits): one-click Align | 🔨 Built — awaiting verification |
-| M6.9 | Track-change desync, actually fixed: the clock-start invariant + tests | 🔨 Built — covered by tests/track-change.test.js |
+| M6.9 | Track-change desync: the clock-start invariant + tests | ✅ No longer starts mid-song |
+| M6.10 | Clock validated against the player bar (stalled-element bug) | 🔨 Built — awaiting verification |
 | M7 | (stretch) Phone auto-detection, publishing questions | ⬜ |
 
 ## Project structure
@@ -118,6 +119,18 @@ Three earlier attempts failed because each tried to *predict* when YouTube swaps
 **The fix is an invariant, not a heuristic: never follow a clock we have not seen start.** When a track changes, the lyrics hold (visible, unhighlighted) until the clock proves itself — reading under 5s, or jumping backwards. Landing mid-song right after a change is then structurally impossible, whatever YouTube does internally. Page-load lyrics skip the wait (that clock is mid-song by definition, `expectStart=false`), and a 30s escape covers someone seeking deep into a track before its opening ever played.
 
 Covered by `tests/track-change.test.js`, which runs the real `content.js` in a sandbox against a scripted clock — including the exact 460s-clock-with-fresh-lyrics case. **Run both tests before changing sync code.**
+
+## M6.10 trust the clock the user can see (2026-07-14)
+
+Next report: song playing at 0:28, lyrics loaded, **nothing highlighted at all**. The mid-song jump was gone, but the highlight never started. Cause: everything downstream trusted `<video>.currentTime` without ever checking it was the element actually playing. M6.8's `pickVideo()` took the first selector match, which on some pages is a stalled element sitting at 0:00 — so `currentLineIndex(0)` returned -1 forever while the song played on. (The M6.9 hold could also stretch to its 30s escape in the same situation.)
+
+**The player bar's "0:28 / 4:47" readout is now the reference.** `detect()` re-reads it every 500ms and:
+- picks the `<video>` whose clock agrees with it (±2s) — provably the track playing;
+- sets `clockTrusted`, and if no element agrees, the lyrics follow **the player bar itself** (whole seconds — coarse, but never wrong) instead of stopping;
+- logs each time trust flips, and reports `trusted=` on every song change;
+- uses the bar's total as the track length when the element is untrustworthy.
+
+Hold release also accepts "the player bar shows the track at its start" as proof, and the escape hatch dropped 30s → 12s. `tests/track-change.test.js` now covers a stalled element alongside a live one, and the no-element-agrees fallback (7 cases, all green).
 
 ## Known issues / notes
 

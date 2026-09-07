@@ -74,6 +74,8 @@ let holdLogged = false; // keeps the "holding highlight" note to once per hold
 let awaitingStart = false; // new song loaded: has its clock actually started?
 let holdSince = 0;
 let lastClock = 0; // previous frame's currentTime, so restarts are visible
+let barTime = null; // last reading of the player bar's own clock
+let clockTrusted = true; // does the <video> we read agree with that bar?
 
 // async/await: getLyrics talks to the network, which takes time. "await"
 // pauses THIS function (nothing else) until the answer arrives.
@@ -149,30 +151,63 @@ function hookVideo(video) {
 // YouTube sometimes keeps more than one <video> around (the video/song
 // toggle, preloading). The element that is actually playing owns the clock
 // our lyrics follow — taking the first one in the DOM can pick a stale player.
-const VIDEO_SELECTORS = ["ytmusic-player video", "#movie_player video", "video.html5-main-video"];
+// The player bar shows "0:28 / 4:47" — the clock Robi is actually looking at,
+// and the only reading guaranteed to belong to the track he can hear. We use
+// it to check that the <video> we picked is that same track, and as a coarse
+// fallback clock if no element agrees.
+SELECTORS.time = [".time-info.ytmusic-player-bar", "ytmusic-player-bar .time-info"];
 
-function pickVideo() {
-  // Prefer the element inside YT Music's own player: home-page previews and
-  // the song/video toggle can leave other <video> tags on the page, and their
-  // clocks have nothing to do with the track in the player bar.
-  for (const sel of VIDEO_SELECTORS) {
-    const el = document.querySelector(sel);
-    if (el) return el;
+function readPlayerBarTime() {
+  const el = queryFirst(SELECTORS.time);
+  const m = el && el.textContent.match(/(\d+):(\d+)\s*\/\s*(\d+):(\d+)/);
+  if (!m) return null;
+  return { current: +m[1] * 60 + +m[2], total: +m[3] * 60 + +m[4] };
+}
+
+// Pages can hold several <video> elements (home-page previews, the song/video
+// toggle, preloading). Picking by selector alone once left us reading a
+// stalled element: lyrics loaded, clock frozen, nothing ever highlighted. So
+// pick the element whose clock agrees with the player bar — that one is
+// provably the track playing.
+function pickVideo(bar) {
+  const all = [...document.querySelectorAll("video")];
+  if (!all.length) return null;
+  if (bar) {
+    const agrees = all.find(
+      (v) => Number.isFinite(v.duration) && Math.abs(v.currentTime - bar.current) <= 2
+    );
+    if (agrees) return agrees;
   }
-  const all = document.querySelectorAll("video");
-  if (all.length < 2) return all[0] || null;
-  return [...all].find((v) => !v.paused && Number.isFinite(v.duration)) || all[0];
+  return all.find((v) => !v.paused && Number.isFinite(v.duration)) || all[0];
+}
+
+// What the lyrics follow: the video's clock while it matches the player bar,
+// otherwise the bar itself (whole seconds — coarse, but never wrong).
+function readClock() {
+  if (clockTrusted && videoEl) return videoEl.currentTime;
+  return barTime ? barTime.current : null;
 }
 
 function detect() {
   // YT Music is a single-page app: the <video> element's currentTime and
   // duration are live and cheap to read.
-  const video = pickVideo();
+  barTime = readPlayerBarTime();
+  const video = pickVideo(barTime);
   const title = readTitle();
   const artist = readArtist();
   if (!video || !title) return;
   videoEl = video;
   hookVideo(video);
+
+  // Only follow this element's clock while it matches what the player bar
+  // shows. A frozen or leftover element quietly reading 0:00 is exactly how
+  // lyrics end up loaded but never highlighted.
+  const wasTrusted = clockTrusted;
+  clockTrusted = !barTime || Math.abs(video.currentTime - barTime.current) <= 2;
+  if (wasTrusted !== clockTrusted) {
+    console.log(`${LOG} clock ${clockTrusted ? "matches" : "disagrees with"} the player bar (video ${video.currentTime.toFixed(1)}s vs bar ${barTime ? barTime.current : "?"}s)${clockTrusted ? "" : " — following the player bar instead"}`);
+  }
+  const dur = clockTrusted ? video.duration : barTime.total;
 
   const songKey = `${title}|${artist}`;
   if (songKey !== lastSongKey) {
@@ -191,16 +226,17 @@ function detect() {
     }
     const firstEver = lastSongKey === null; // page load: media is already correct
     const metadataFresh = metadataStamp >= pendingSince - 2000;
-    const restarted = video.currentTime < 5; // the new track is at its beginning
+    const clockNow = readClock() ?? video.currentTime;
+    const restarted = clockNow < 5; // the new track is at its beginning
     const gaveUp = Date.now() - pendingSince > 10000;
-    if (Number.isFinite(video.duration) && (firstEver || metadataFresh || restarted || gaveUp)) {
+    if (Number.isFinite(dur) && (firstEver || metadataFresh || restarted || gaveUp)) {
       const via = firstEver ? "first" : metadataFresh ? "metadata" : restarted ? "restart" : "timeout";
-      console.log(`${LOG} → "${title}" len=${Math.round(video.duration)}s at=${video.currentTime.toFixed(1)}s videos=${document.querySelectorAll("video").length} via=${via}`);
+      console.log(`${LOG} → "${title}" len=${Math.round(dur)}s at=${clockNow.toFixed(1)}s videos=${document.querySelectorAll("video").length} trusted=${clockTrusted} via=${via}`);
       lastSongKey = songKey;
       lastTitle = title;
       lastArtist = artist;
       pendingSince = 0;
-      onSongChange(title, artist, video.duration, !firstEver);
+      onSongChange(title, artist, dur, !firstEver);
     }
     return;
   }
@@ -209,11 +245,11 @@ function detect() {
   // fetched, our match was made against the wrong number — fetch again with
   // the real one. Self-limiting, since the refetch stores the new duration.
   if (
-    lines && fetchedDuration && Number.isFinite(video.duration) &&
-    Math.abs(video.duration - fetchedDuration) > 2
+    lines && fetchedDuration && Number.isFinite(dur) &&
+    Math.abs(dur - fetchedDuration) > 2
   ) {
-    console.log(`${LOG} track length corrected ${Math.round(fetchedDuration)}s → ${Math.round(video.duration)}s, refetching lyrics`);
-    onSongChange(lastTitle, lastArtist, video.duration);
+    console.log(`${LOG} track length corrected ${Math.round(fetchedDuration)}s → ${Math.round(dur)}s, refetching lyrics`);
+    onSongChange(lastTitle, lastArtist, dur);
   }
 }
 
@@ -232,7 +268,8 @@ function render() {
   requestAnimationFrame(render);
   if (!lines || !videoEl) return;
 
-  const clock = videoEl.currentTime;
+  const clock = readClock();
+  if (clock === null) return; // no clock we trust yet
 
   // THE RULE: never follow a clock we haven't seen start.
   //
@@ -246,8 +283,11 @@ function render() {
   // highlighted. The 30s escape covers someone seeking deep into a song
   // before its opening ever played.
   if (awaitingStart) {
-    const restarted = clock < 5 || clock < lastClock - 1;
-    const waitedTooLong = Date.now() - holdSince > 30000;
+    // The player bar counts as proof too: if what Robi can see says the track
+    // is at its beginning, it is — no need to keep the lyrics waiting.
+    const barAtStart = barTime && barTime.current < 5;
+    const restarted = clock < 5 || barAtStart || clock < lastClock - 1;
+    const waitedTooLong = Date.now() - holdSince > 12000;
     lastClock = clock;
     if (!restarted && !waitedTooLong) {
       if (!holdLogged) {
@@ -258,15 +298,16 @@ function render() {
     }
     awaitingStart = false;
     holdLogged = false;
-    console.log(`${LOG} following the clock from ${clock.toFixed(1)}s (${restarted ? "track started" : "waited 30s"})`);
+    console.log(`${LOG} following the clock from ${clock.toFixed(1)}s (${restarted ? "track started" : "gave up waiting"})`);
   }
   lastClock = clock;
 
   // Second guard: the loaded media should also be the one these lyrics were
   // fetched for. detect() refetches within 500ms when it isn't.
+  const mediaDuration = clockTrusted ? videoEl.duration : barTime && barTime.total;
   if (
-    fetchedDuration && Number.isFinite(videoEl.duration) &&
-    Math.abs(videoEl.duration - fetchedDuration) > 2
+    fetchedDuration && Number.isFinite(mediaDuration) &&
+    Math.abs(mediaDuration - fetchedDuration) > 2
   ) {
     return;
   }

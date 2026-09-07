@@ -3,7 +3,9 @@
 const fs = require("fs"), vm = require("vm");
 
 const highlighted = [];          // every index the panel was told to light
-const video = { duration: 476, currentTime: 0, paused: false };
+const noEvents = () => {}; // fake players need the listener API hookVideo uses
+const video = { duration: 476, currentTime: 0, paused: false, addEventListener: noEvents };
+const dom = { title: "Woods", byline: "Mac Miller", time: "0:28 / 4:47", videos: [] };
 const lyrics = Array.from({ length: 48 }, (_, i) => ({ time: i * 10, text: `line ${i}` }));
 
 const noop = () => {};
@@ -12,7 +14,16 @@ const sandbox = {
   performance: { now: () => Date.now() },
   setInterval: noop,
   requestAnimationFrame: noop,
-  document: { querySelector: () => null, querySelectorAll: () => [] },
+  document: {
+    // fake player-bar DOM: title, byline and the "0:28 / 4:47" time readout
+    querySelector: (sel) => {
+      if (sel.includes("byline")) return { textContent: dom.byline };
+      if (sel.includes("title")) return { textContent: dom.title };
+      if (sel.includes("time-info")) return { textContent: dom.time };
+      return null;
+    },
+    querySelectorAll: (sel) => (sel === "video" ? dom.videos : []),
+  },
   Panel: {
     showMessage: noop, showSynced: noop, showPlain: noop, setTranslations: noop,
     setSyncState: noop, setActiveProgress: noop, setScrollPaused: noop,
@@ -30,9 +41,9 @@ vm.createContext(sandbox);
 const src = fs.readFileSync(require("path").join(__dirname, "../extension/content.js"), "utf8");
 vm.runInContext(src + `
 ;globalThis.__t = {
-  onSongChange, render,
-  setVideo: (v) => { videoEl = v; },
-  state: () => ({ awaitingStart, lineIndex }),
+  onSongChange, render, detect,
+  setVideo: (v) => { videoEl = v; clockTrusted = true; },
+  state: () => ({ awaitingStart, lineIndex, clockTrusted }),
 };`, sandbox);
 
 const T = sandbox.__t;
@@ -82,6 +93,30 @@ const frames = (n) => { for (let i = 0; i < n; i++) T.render(); };
   frames(2);
   check("a backwards jump also proves a new track", highlighted.length > 0,
     `highlights: [${highlighted}]`);
+
+  // --- a stalled <video> must never be mistaken for the player ---
+  // (this is the bug where lyrics load, the clock sits at 0:00, and nothing
+  //  is ever highlighted while the song plays on)
+  highlighted.length = 0;
+  const frozen = { duration: 287, currentTime: 0, paused: false, addEventListener: noEvents };
+  const live = { duration: 287, currentTime: 28.4, paused: false, addEventListener: noEvents };
+  dom.videos = [frozen, live]; // the stalled one comes first in the DOM
+  dom.time = "0:28 / 4:47";
+  T.detect();
+  await T.onSongChange("Woods", "Mac Miller", 287, false);
+  frames(2);
+  check("ignores a stalled element and follows the playing one",
+    highlighted[0] === 2, `line ${highlighted[0]} at 0:28 (want 2)`);
+
+  // --- and when NO element agrees with the player bar, follow the bar ---
+  highlighted.length = 0;
+  dom.videos = [frozen]; // only the stalled element exists
+  T.detect();
+  await T.onSongChange("Woods II", "Mac Miller", 287, false);
+  frames(2);
+  check("falls back to the player bar's own clock",
+    T.state().clockTrusted === false && highlighted[0] === 2,
+    `trusted=${T.state().clockTrusted}, line ${highlighted[0]} (want 2)`);
 
   console.log(failures ? `\n${failures} failing` : "\nall green");
   process.exit(failures ? 1 : 0);
