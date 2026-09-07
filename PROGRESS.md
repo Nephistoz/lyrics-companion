@@ -15,6 +15,7 @@
 | M6.5 | Product polish: movable/resizable panel, opacity, deeper personalization | ✅ Done — verified by Robi 2026-07-14 |
 | M6.6 | Lyric sync drift: root-cause fixes + per-song manual nudge | ✅ Partly — helped, but transitions still broke (see M6.7) |
 | M6.7 | Track-change desync: clock/media identity guards | 🔨 Built — awaiting verification |
+| M6.8 | Padded versions (video/extended edits): one-click Align | 🔨 Built — awaiting verification |
 | M7 | (stretch) Phone auto-detection, publishing questions | ⬜ |
 
 ## Project structure
@@ -96,6 +97,15 @@ Fixes:
 - **Stronger fetch gate.** A song change now also waits for `currentTime < 5s` (a clock genuinely back at the start of a track); timeout raised 2s → 10s since the wait is now safe, and first-detection-on-page-load fetches immediately.
 - **`pickVideo()`** returns the `<video>` that is actually playing rather than the first in the DOM (YouTube keeps several around for the song/video toggle and preloading).
 - **Transition diagnostics:** each song change logs `len= at= videos= via=` (which condition released the fetch: first/metadata/restart/timeout) — paste these if the bug ever reappears.
+
+## M6.8 padded versions (2026-07-14)
+
+Console evidence from Robi: three drift warnings in a row, all in the same direction — the playing track ran **31s / 61s / 71s longer** than the closest lyrics on LRCLIB. Not a timing bug: YouTube Music was serving **video or extended versions** (intros, DJ edits — common in the electronic tracks he plays) for which no LRC of matching length exists anywhere. The album-cut lyrics are correct, they simply start later than the padded audio.
+
+- **One-click Align.** When the track is longer than the best match, the sync bar's middle button becomes `Align +31s`; clicking shifts the whole file by the difference (padding is nearly always an intro). Offered rather than applied automatically, since the extra time could be an outro. Fine-tune afterwards with ± and it persists per song like any other nudge.
+- Nudge protocol now carries three shapes: `delta` (± button), `null` (reset), `{set}` (align).
+- Drift notices moved from `console.warn` to `console.log` — they were cluttering the error console, and they are information, not faults.
+- `pickVideo()` now prefers the `<video>` inside YT Music's own player (`ytmusic-player`, `#movie_player`, `.html5-main-video`) before falling back to "whichever is playing" — home-page preview videos were a real risk of reading the wrong clock.
 
 ## Known issues / notes
 

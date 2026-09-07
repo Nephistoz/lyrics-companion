@@ -68,6 +68,7 @@ let pendingSince = 0; // when the current song's title first appeared
 let fetchedDuration = 0; // the duration the current lyrics were matched against
 let syncOffset = 0; // this song's manual timing nudge, in seconds
 let driftHint = ""; // why the timing may be off (shown in the sync bar)
+let fitSuggestion = 0; // seconds of padding the sync bar offers to correct
 let lastProgressAt = 0;
 let holdLogged = false; // keeps the "holding highlight" note to once per hold
 
@@ -100,14 +101,21 @@ async function onSongChange(title, artist, duration) {
       // LRCLIB carries several versions of many songs. When even the closest
       // one isn't the length of what's playing, timings will drift — say so
       // rather than leaving Robi to wonder why the lyrics wander off.
+      fitSuggestion = 0;
       if (result.durationMismatch) {
-        const gap = Math.round(Math.abs(result.matchedDuration - duration));
-        const longer = result.matchedDuration > duration ? "longer" : "shorter";
-        driftHint = `Closest match runs ${gap}s ${longer} than this track, so timing may drift.`;
-        console.warn(`${LOG} ${driftHint}`);
+        const diff = duration - result.matchedDuration;
+        const gap = Math.round(Math.abs(diff));
+        driftHint = diff > 0
+          ? `This version runs ${gap}s longer than any lyrics on file — usually a music video or extended mix with an intro.`
+          : `Closest lyrics run ${gap}s longer than this track, so timing may drift.`;
+        // Longer track = padding, and padding is nearly always at the start,
+        // so shifting the whole file by the difference usually lands it.
+        // Offered as one click rather than applied: the extra could be an outro.
+        if (diff > 0) fitSuggestion = Math.round(diff);
+        console.log(`${LOG} ${driftHint}`);
       }
       Panel.showSynced(lines, result.matched);
-      Panel.setSyncState(syncOffset, driftHint);
+      Panel.setSyncState(syncOffset, driftHint, fitSuggestion);
       maybeLoadTranslations();
     } else {
       Panel.showPlain(result.plain, result.matched);
@@ -133,7 +141,16 @@ function hookVideo(video) {
 // YouTube sometimes keeps more than one <video> around (the video/song
 // toggle, preloading). The element that is actually playing owns the clock
 // our lyrics follow — taking the first one in the DOM can pick a stale player.
+const VIDEO_SELECTORS = ["ytmusic-player video", "#movie_player video", "video.html5-main-video"];
+
 function pickVideo() {
+  // Prefer the element inside YT Music's own player: home-page previews and
+  // the song/video toggle can leave other <video> tags on the page, and their
+  // clocks have nothing to do with the track in the player bar.
+  for (const sel of VIDEO_SELECTORS) {
+    const el = document.querySelector(sel);
+    if (el) return el;
+  }
   const all = document.querySelectorAll("video");
   if (all.length < 2) return all[0] || null;
   return [...all].find((v) => !v.paused && Number.isFinite(v.duration)) || all[0];
@@ -273,9 +290,11 @@ WordPopup.onOpenChange((open) => Panel.setScrollPaused(open));
 
 // Sync bar: shift this song's lyrics earlier or later, remembered per song so
 // each awkward track only needs fixing once. null = back to zero.
-Panel.onSyncNudge((delta) => {
-  syncOffset = delta === null ? 0 : Math.round((syncOffset + delta) * 100) / 100;
-  Panel.setSyncState(syncOffset, driftHint);
+Panel.onSyncNudge((change) => {
+  if (change === null) syncOffset = 0; // reset
+  else if (typeof change === "object") syncOffset = change.set; // one-click align
+  else syncOffset = Math.round((syncOffset + change) * 100) / 100; // ± nudge
+  Panel.setSyncState(syncOffset, driftHint, fitSuggestion);
   lineIndex = -1; // force the highlight to recompute on the next frame
   OffsetStore.set(lastTitle, lastArtist, syncOffset);
 });

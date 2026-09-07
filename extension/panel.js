@@ -19,6 +19,8 @@ const Panel = (() => {
   let wordClickHandler = null; // content.js wires this to the word popup
   let settingsChangeHandler = null; // content.js wires this to SettingsStore
   let syncNudgeHandler = null; // content.js wires this to the per-song offset
+  let fitSuggestion = 0; // seconds this version looks padded by (0 = none)
+  let currentOffset = 0; // what the sync bar is showing right now
   let lastSettings = null;
   let dragging = null; // {dx, dy} while the header is being dragged
   let suppressResize = false; // ignore ResizeObserver events we caused
@@ -122,7 +124,12 @@ const Panel = (() => {
 
     root.querySelector("#lc-sync-earlier").addEventListener("click", () => nudge(-0.25));
     root.querySelector("#lc-sync-later").addEventListener("click", () => nudge(0.25));
-    root.querySelector("#lc-sync-value").addEventListener("click", () => nudge(null));
+    root.querySelector("#lc-sync-value").addEventListener("click", () => {
+      // Untouched song with a padded version → offer the alignment.
+      // Otherwise the middle button is the "back to zero" control.
+      if (fitSuggestion && !currentOffset) nudge({ set: fitSuggestion });
+      else nudge(null);
+    });
 
     buildDragAndResize();
   }
@@ -139,16 +146,24 @@ const Panel = (() => {
   }
 
   // offset: seconds the lyrics are shifted by. hint: why the timing may be
-  // off (empty when the match looks trustworthy).
-  function setSyncState(offset, hint) {
+  // off (empty when the match looks trustworthy). fit: seconds this version
+  // appears to be padded by, offered as a one-click alignment.
+  function setSyncState(offset, hint, fit = 0) {
     ensureBuilt();
+    currentOffset = offset;
+    fitSuggestion = fit;
     const bar = root.querySelector("#lc-sync");
     const value = root.querySelector("#lc-sync-value");
-    value.textContent = offset
-      ? `${offset > 0 ? "+" : "−"}${Math.abs(offset).toFixed(2)}s`
-      : hint ? "check timing" : "In sync";
-    value.title = [hint, offset ? "Click to reset the timing" : ""].filter(Boolean).join(" ") ||
-      "Timing looks right";
+    if (offset) {
+      value.textContent = `${offset > 0 ? "+" : "−"}${Math.abs(offset).toFixed(2)}s`;
+      value.title = [hint, "Click to reset the timing"].filter(Boolean).join(" ");
+    } else if (fit) {
+      value.textContent = `Align +${Math.round(fit)}s`;
+      value.title = `${hint} Click to shift the lyrics ${Math.round(fit)}s later, which lines them up when the extra time is an intro.`;
+    } else {
+      value.textContent = hint ? "check timing" : "In sync";
+      value.title = hint || "Timing looks right";
+    }
     bar.classList.toggle("warn", !!hint || !!offset);
   }
 
