@@ -1,13 +1,15 @@
 /* styles.css — phone-first, matching the extension's design tokens:
-   indigo-tinted charcoal, warm off-white, amber accent, Space Grotesk. */
+   Night aubergine, Ink, Haze, the amber accent for things that are yours,
+   Bricolage Grotesque for English and Literata italic for anything Spanish. */
 
 :root {
-  --bg: #14141b;
-  --surface: #1c1c26;
-  --text: #f2f0eb;
-  --dim: #8b8b98;
-  --line: rgba(255, 255, 255, 0.09);
+  --bg: #1a1722;
+  --surface: #231f2d;
+  --text: #f5f2fa;
+  --dim: #a39db2;
+  --line: rgba(245, 242, 250, 0.09);
   --accent: #ffb454;
+  --es: "Literata", Georgia, serif;
 }
 
 * { box-sizing: border-box; }
@@ -16,7 +18,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  font-family: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -75,9 +77,9 @@ nav { display: flex; gap: 8px; margin-bottom: 18px; }
 #card-word { font-size: 32px; font-weight: 700; letter-spacing: -0.01em; }
 #card-song { margin-top: 6px; font-size: 12.5px; color: var(--dim); }
 #card-back { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
-#card-trans { font-size: 22px; font-weight: 600; color: var(--accent); }
+#card-trans { font-family: var(--es); font-style: italic; font-size: 24px; }
 #card-meaning { margin-top: 10px; font-size: 14px; color: var(--text); opacity: 0.8; line-height: 1.45; }
-#card-line { margin-top: 12px; font-size: 13px; font-style: italic; color: var(--dim); }
+#card-line { margin-top: 12px; font-size: 13px; color: var(--dim); } /* English: never italic — italic serif means Spanish */
 #card-hint { margin-top: 14px; }
 
 #grade { display: flex; gap: 10px; margin-top: 16px; }
@@ -104,7 +106,7 @@ nav { display: flex; gap: 8px; margin-bottom: 18px; }
   overflow-y: auto;
 }
 #sheet-word { font-size: 20px; font-weight: 700; text-transform: lowercase; }
-#sheet-trans { margin-top: 4px; font-size: 17px; font-weight: 600; color: var(--accent); }
+#sheet-trans { margin-top: 4px; font-family: var(--es); font-style: italic; font-size: 19px; }
 #sheet-defs { margin-top: 8px; font-size: 13.5px; color: var(--text); opacity: 0.8; line-height: 1.45; }
 .sheet-row { display: flex; gap: 10px; margin-top: 14px; }
 .sheet-row button { flex: 1; }

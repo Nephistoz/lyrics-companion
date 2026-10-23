@@ -1,84 +1,224 @@
 <!DOCTYPE html>
-<!-- vocab.html — the saved-words list. Opens when you click the extension's
-     toolbar icon (manifest "action"). Plain extension page: it can use
-     chrome.storage directly, same data the content script writes.
-     Colors come from CSS variables that vocab.js sets from SettingsStore,
-     so it follows the same theme + accent as the lyrics panel. -->
-<html>
+<!-- vocab.html — "Your words": the saved-words list. Opens when you click the
+     extension's toolbar icon (manifest "action"). Plain extension page: it
+     can use chrome.storage directly, same data the content script writes.
+     Words are grouped by the song they came from, and each lyric line wears
+     the same highlighter mark the panel draws. Theme + accent follow the
+     panel's settings (vocab.js sets the variables). -->
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <style>
     @font-face {
-      font-family: "Space Grotesk";
-      src: url("fonts/SpaceGrotesk.woff2") format("woff2");
+      font-family: "LC Bricolage";
+      src: url("fonts/BricolageGrotesque.woff2") format("woff2");
+      font-weight: 200 800;
+      font-stretch: 75% 100%;
+    }
+    @font-face {
+      font-family: "LC Literata";
+      src: url("fonts/LiterataItalic.woff2") format("woff2");
       font-weight: 300 700;
+      font-style: italic;
     }
     :root {
-      --bg: #14141b;
-      --surface: #1c1c26;
-      --text: #f2f0eb;
-      --dim: #8b8b98;
-      --line: rgba(255, 255, 255, 0.09);
+      --bg: #1a1722;
+      --ink: #f5f2fa;
+      --haze: #a39db2;
+      --rule: rgba(245, 242, 250, 0.09);
       --accent: #ffb454;
+      --mark: #ffb4545c;
     }
+    /* The list scrolls inside <main>, under a fixed header. If the page
+       itself scrolled, its scrollbar would eat into the 380px body and
+       push out a horizontal one. */
     body {
+      display: flex;
+      flex-direction: column;
       width: 380px;
       max-height: 560px;
+      overflow: hidden;
       margin: 0;
-      padding: 0;
       background: var(--bg);
-      color: var(--text);
-      font-family: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+      color: var(--ink);
+      font-family: "LC Bricolage", "Segoe UI", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
     header {
-      position: sticky;
-      top: 0;
+      flex: none;
       display: flex;
       align-items: baseline;
-      gap: 6px;
+      gap: 9px;
+      padding: 16px 18px 12px;
       background: var(--bg);
-      padding: 14px 16px 10px;
-      border-bottom: 1px solid var(--line);
-      font-size: 15px;
-      font-weight: 700;
-      z-index: 1;
+      border-bottom: 1px solid var(--rule);
     }
-    header span { color: var(--dim); font-weight: 400; }
-    #sync { margin-left: auto; font-size: 11.5px; }
-    #list { padding: 4px 16px 14px; }
-    .entry {
-      padding: 12px 0;
-      border-bottom: 1px solid var(--line);
+    h1 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 680;
+      letter-spacing: -0.01em;
     }
-    .entry:last-child { border-bottom: none; }
-    .top {
+    #count {
+      font-size: 13px;
+      color: var(--haze);
+      font-variant-numeric: tabular-nums;
+    }
+    #sync {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--haze);
+    }
+    main {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding-bottom: 8px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--rule) transparent;
+    }
+
+    /* one group per song, newest first */
+    .group {
+      padding: 14px 18px 4px;
+    }
+    .group + .group {
+      border-top: 1px solid var(--rule);
+    }
+    .song {
       display: flex;
       align-items: baseline;
       gap: 8px;
+      min-width: 0;
+      margin: 0 0 2px;
+      font-size: 13px;
     }
-    .word { font-size: 16px; font-weight: 700; }
-    .trans { font-size: 14px; font-weight: 600; color: var(--accent); flex: 1; }
+    .song-title {
+      flex: none;
+      max-width: 70%;
+      font-weight: 640;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .song-artist {
+      min-width: 0;
+      color: var(--haze);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .entry {
+      position: relative;
+      padding: 9px 28px 9px 0;
+    }
+    .top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      column-gap: 10px;
+    }
+    .word {
+      font-size: 16px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+    /* Spanish, always in the italic serif */
+    .trans {
+      font-family: "LC Literata", Georgia, serif;
+      font-style: italic;
+      font-size: 15px;
+    }
+    .context {
+      margin: 4px 0 0;
+      font-size: 12.5px;
+      line-height: 1.45;
+      color: var(--haze);
+    }
+    mark {
+      background: linear-gradient(transparent 56%, var(--mark) 56%, var(--mark) 94%, transparent 94%);
+      color: var(--ink);
+    }
+    .def {
+      display: -webkit-box;
+      margin: 3px 0 0;
+      overflow: hidden;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--haze);
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
     .del {
       all: unset;
+      position: absolute;
+      top: 10px;
+      right: 0;
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      color: var(--haze);
+      opacity: 0.45;
       cursor: pointer;
-      color: var(--dim);
-      font-size: 12px;
-      padding: 2px 4px;
-      border-radius: 4px;
     }
-    .del:hover { color: #ff6e6e; }
-    .def { margin-top: 4px; font-size: 12.5px; color: var(--text); opacity: 0.75; line-height: 1.4; }
-    .context { margin-top: 6px; font-size: 12px; color: var(--dim); font-style: italic; }
-    .song { margin-top: 2px; font-size: 11.5px; color: var(--dim); opacity: 0.8; }
-    .empty { padding: 28px 16px; color: var(--dim); font-size: 13.5px; line-height: 1.5; }
+    .entry:hover .del,
+    .del:focus-visible {
+      opacity: 1;
+    }
+    .del:hover {
+      color: #ff7a7a;
+      background: var(--rule);
+    }
+    .del:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    .del svg {
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    .empty {
+      padding: 30px 22px 34px;
+    }
+    .empty h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 640;
+    }
+    .empty p {
+      max-width: 32ch;
+      margin: 6px 0 0;
+      font-size: 13.5px;
+      line-height: 1.55;
+      color: var(--haze);
+    }
   </style>
 </head>
 <body>
-  <header>My vocabulary <span id="count"></span> <span id="sync"></span></header>
-  <div id="list"></div>
+  <header>
+    <h1>Your words</h1>
+    <span id="count"></span>
+    <span id="sync" role="status"></span>
+  </header>
+  <main id="list"></main>
   <script src="config.js"></script>
   <script src="syncProvider.js"></script>
   <script src="settingsStore.js"></script>
+  <script src="meaningProvider.js"></script>
   <script src="vocabStore.js"></script>
   <script src="vocab.js"></script>
 </body>

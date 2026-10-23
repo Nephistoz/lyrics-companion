@@ -1,12 +1,17 @@
-// wordPopup.js — the little card that appears when you tap a lyric word.
+// wordPopup.js — the card that appears when you tap a lyric word.
 //
-// Shows the Spanish translation + English definition and a Save button.
+// Laid out like a dictionary entry: the word and its pronunciation, the
+// Spanish (in the italic serif that marks your language everywhere), then
+// part of speech and definition. If the word is already in your list it says
+// so instead of offering to save it twice.
 // UI only: content.js tells it what word was tapped and in which song;
-// lookups go through MeaningProvider, saving through VocabStore.
+// lookups go through MeaningProvider, saving through VocabStore, and the card
+// sits beside the panel via Panel.placeBeside.
 
 const WordPopup = (() => {
   let el = null;
   let lookupId = 0; // ignore stale lookups when tapping words quickly
+  let anchorTop = 0; // where the tapped word is, so the card lines up with it
   let openChangeHandler = null; // content.js uses this to pause panel scroll
 
   function onOpenChange(fn) {
@@ -17,98 +22,133 @@ const WordPopup = (() => {
     if (el) return;
     el = document.createElement("div");
     el.id = "lc-popup";
-    el.style.display = "none";
+    el.hidden = true;
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-label", "Word details");
     document.body.appendChild(el);
 
-    // Any click that isn't inside the popup or on another lyric word closes
+    // Any click that isn't inside the card or on another lyric word closes
     // it. Capture phase = we see the click before the rest of the page.
     document.addEventListener(
       "click",
       (e) => {
-        if (el.style.display === "none") return;
+        if (el.hidden) return;
         if (el.contains(e.target)) return;
         if (e.target.closest && e.target.closest(".lc-word")) return;
         hide();
       },
       true
     );
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") hide();
+    });
   }
 
   function hide() {
-    if (!el || el.style.display === "none") return;
-    el.style.display = "none";
+    if (!el || el.hidden) return;
+    el.hidden = true;
     lookupId++; // cancels any in-flight lookup rendering
     if (openChangeHandler) openChangeHandler(false);
   }
 
-  // Small helpers to build DOM safely (lyrics are untrusted text — always
-  // textContent, never innerHTML with data in it).
-  function row(className, text) {
-    const div = document.createElement("div");
-    div.className = className;
-    div.textContent = text;
-    return div;
+  // Small DOM helper — lyrics and definitions are text from the internet,
+  // so they only ever go in through textContent.
+  function node(tag, className, text) {
+    const n = document.createElement(tag);
+    if (className) n.className = className;
+    if (text !== undefined) n.textContent = text;
+    return n;
   }
 
-  function position(rect) {
-    // The panel hugs the right edge, so try to put the popup to the LEFT of
-    // the tapped word; clamp so it never leaves the screen.
-    const W = 300;
-    const left = Math.max(8, Math.min(rect.left - W - 12, window.innerWidth - W - 8));
-    const top = Math.max(8, Math.min(rect.top - 8, window.innerHeight - 280));
-    el.style.left = `${left}px`;
-    el.style.top = `${top}px`;
+  function place() {
+    Panel.placeBeside(el, anchorTop - 18);
+  }
+
+  function head(word, phonetic) {
+    const h = node("div", "lc-pop-head");
+    h.appendChild(node("span", "lc-pop-word", word));
+    if (phonetic) h.appendChild(node("span", "lc-pop-phon", phonetic));
+    return h;
+  }
+
+  // "In your words", plus the song it came from when that's a different one
+  function savedNote(text) {
+    const note = node("div", "lc-pop-saved");
+    note.innerHTML = Panel.icon("check");
+    note.append(text);
+    return note;
   }
 
   async function show({ word, line, rect, songTitle, artist }) {
     ensureBuilt();
     const id = ++lookupId;
-    position(rect);
-    el.style.display = "";
+    anchorTop = rect.top;
+
+    const loading = node("div", "lc-pop-loading");
+    loading.setAttribute("role", "status");
+    loading.setAttribute("aria-label", "Looking up the word");
+    loading.append(node("i"), node("i"), node("i"));
+    el.replaceChildren(head(word.toLowerCase()), loading);
+    el.hidden = false;
+    place();
     if (openChangeHandler) openChangeHandler(true);
 
-    el.innerHTML = "";
-    el.appendChild(row("lc-pop-word", word));
-    el.appendChild(row("lc-pop-status", "Looking it up…"));
+    const key = MeaningProvider.normalize(word);
+    const [result, existing] = await Promise.all([
+      MeaningProvider.lookup(word),
+      VocabStore.getAll()
+        .then((all) => all.find((e) => e.word === key))
+        .catch(() => null),
+    ]);
+    if (id !== lookupId) return; // card was closed or reused meanwhile
 
-    const result = await MeaningProvider.lookup(word);
-    if (id !== lookupId) return; // popup was closed or reused meanwhile
-
-    el.innerHTML = "";
-    const header = row("lc-pop-word", result.word);
-    if (result.phonetic) header.appendChild(row("lc-pop-phon", result.phonetic));
-    el.appendChild(header);
-
-    if (result.translation) {
-      el.appendChild(row("lc-pop-trans", result.translation));
-    }
+    el.replaceChildren(head(result.word, result.phonetic));
+    if (result.translation) el.appendChild(node("div", "lc-pop-trans", result.translation));
     for (const d of result.definitions) {
-      const def = row("lc-pop-def", d.definition);
-      def.prepend(row("lc-pop-pos", d.partOfSpeech));
-      el.appendChild(def);
+      const sense = node("div", "lc-pop-sense");
+      sense.append(node("div", "lc-pop-pos", d.partOfSpeech), node("div", "lc-pop-def", d.definition));
+      el.appendChild(sense);
     }
     if (!result.translation && result.definitions.length === 0) {
-      el.appendChild(row("lc-pop-status", "Nothing found for this one 🤷 — you can still save it."));
+      el.appendChild(
+        node("div", "lc-pop-status", "No translation or definition found — slang and names often aren't listed. You can still save it.")
+      );
     }
 
-    const save = document.createElement("button");
-    save.id = "lc-pop-save";
-    save.textContent = "★ Save word";
-    save.addEventListener("click", async () => {
-      save.disabled = true;
-      save.textContent = "Saving…";
-      await VocabStore.add({
-        word: result.word,
-        translation: result.translation || "",
-        meaning: result.definitions[0] ? result.definitions[0].definition : "",
-        songTitle: songTitle || "",
-        artist: artist || "",
-        lyricLine: line,
-        dateAdded: new Date().toISOString(),
+    const foot = node("div", "lc-pop-foot");
+    if (existing) {
+      const from = existing.songTitle && existing.songTitle !== songTitle ? `, saved from ${existing.songTitle}` : "";
+      foot.appendChild(savedNote(`In your words${from}`));
+    } else {
+      const save = node("button", "lc-btn lc-primary");
+      save.type = "button";
+      save.innerHTML = Panel.icon("save");
+      save.append("Save word");
+      save.addEventListener("click", async () => {
+        save.disabled = true;
+        try {
+          await VocabStore.add({
+            word: result.word,
+            translation: result.translation || "",
+            meaning: result.definitions[0] ? result.definitions[0].definition : "",
+            songTitle: songTitle || "",
+            artist: artist || "",
+            lyricLine: line,
+            dateAdded: new Date().toISOString(),
+          });
+          // the panel hears about it through VocabStore.onChange and sweeps
+          // the highlighter mark in across this song
+          foot.replaceChildren(savedNote("Saved to your words"));
+        } catch (err) {
+          save.disabled = false;
+          save.lastChild.textContent = "Save failed — try again";
+          console.warn("[LyricsCompanion] save failed:", err.message);
+        }
       });
-      save.textContent = "✓ Saved";
-    });
-    el.appendChild(save);
+      foot.appendChild(save);
+    }
+    el.appendChild(foot);
+    place(); // the card grew; keep it on screen
   }
 
   return { show, hide, onOpenChange };

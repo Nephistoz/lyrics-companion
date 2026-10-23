@@ -74,5 +74,13 @@ const VocabStore = (() => {
     return { ok: true };
   }
 
-  return { getAll, add, remove, syncNow };
+  // Fires whenever the list changes anywhere: a save in the word popup, a
+  // delete in the vocab list, or a sync pulling in words saved on the phone.
+  function onChange(fn) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local" && changes[KEY]) fn();
+    });
+  }
+
+  return { getAll, add, remove, syncNow, onChange };
 })();

@@ -20,6 +20,8 @@ const MeaningProvider = (() => {
   const MYMEMORY = "https://api.mymemory.translated.net/get";
 
   // "Gettin'" → "gettin" : straighten curly quotes, trim quote marks, lowercase.
+  // Exported: it is THE key for a word, so the panel can tell which lyric
+  // words are already in the vocabulary list by the same rule they were saved.
   function normalize(raw) {
     return raw.replace(/’/g, "'").replace(/^'+|'+$/g, "").toLowerCase();
   }
@@ -122,5 +124,5 @@ const MeaningProvider = (() => {
     };
   }
 
-  return { lookup, translateLines };
+  return { lookup, translateLines, normalize };
 })();

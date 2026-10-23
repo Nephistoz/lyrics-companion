@@ -25,16 +25,18 @@ const sandbox = {
     querySelectorAll: (sel) => (sel === "video" ? dom.videos : []),
   },
   Panel: {
-    showMessage: noop, showSynced: noop, showPlain: noop, setTranslations: noop,
-    setSyncState: noop, setActiveProgress: noop, setScrollPaused: noop,
-    applySettings: noop, onWordClick: noop, onSettingsChange: noop, onSyncNudge: noop,
+    setTrack: noop, showLoading: noop, showNotice: noop, showSynced: noop, showPlain: noop,
+    setTranslations: noop, setSavedWords: noop, setSyncState: noop, setActiveProgress: noop,
+    setScrollPaused: noop, applySettings: noop, onWordClick: noop, onSettingsChange: noop,
+    onSyncNudge: noop, onRetry: noop,
     setActiveLine: (idx) => highlighted.push(idx),
   },
+  VocabStore: { getAll: async () => [], onChange: noop },
   WordPopup: { hide: noop, onOpenChange: noop },
   OffsetStore: { get: async () => 0, set: noop },
   SettingsStore: { get: async () => ({}), onChange: noop },
-  MeaningProvider: {},
-  LyricsProvider: { getLyrics: async () => ({ synced: lyrics, matched: "test", matchedDuration: 476, durationMismatch: false }) },
+  MeaningProvider: { normalize: (w) => w.toLowerCase() },
+  LyricsProvider: { cleanTitle: (t) => t, getLyrics: async () => ({ synced: lyrics, matched: "test", matchedDuration: 476, durationMismatch: false }) },
 };
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);

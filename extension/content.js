@@ -20,6 +20,7 @@ const LOG = "🎵 [LyricsCompanion]";
 const SELECTORS = {
   title: [".title.ytmusic-player-bar"],
   byline: [".byline.ytmusic-player-bar"],
+  art: ["img.image.ytmusic-player-bar", "ytmusic-player-bar .thumbnail img", "ytmusic-player-bar img"],
 };
 
 function queryFirst(selectorList) {
@@ -41,6 +42,21 @@ function readArtist() {
   const el = queryFirst(SELECTORS.byline);
   if (!el) return null;
   return el.textContent.split("•")[0].trim() || null;
+}
+
+// Album art from the player bar, upsized from YouTube's 60px thumbnail.
+function readArt() {
+  for (const sel of SELECTORS.art) {
+    const img = document.querySelector(sel);
+    if (img && /^https?:/.test(img.src)) return img.src.replace(/=w\d+-h\d+/, "=w120-h120");
+  }
+  return null;
+}
+
+// What the panel header shows: the song as YouTube names it, minus the
+// "[Official Video]" noise, with its artist and cover.
+function trackInfo(title, artist) {
+  return { title: LyricsProvider.cleanTitle(title, artist) || title, artist, art: readArt() };
 }
 
 function formatTime(seconds) {
@@ -92,7 +108,8 @@ async function onSongChange(title, artist, duration, expectStart = true) {
   WordPopup.hide(); // a popup from the previous song makes no sense now
   const id = ++fetchId;
   console.log(`${LOG} Song changed → ${title} — ${artist} (${formatTime(duration)}) — fetching lyrics…`);
-  Panel.showMessage("Searching lyrics…", title);
+  Panel.setTrack(trackInfo(title, artist));
+  Panel.showLoading();
 
   // A song fixed by hand once stays fixed: load its saved nudge first.
   syncOffset = await OffsetStore.get(title, artist);
@@ -101,10 +118,14 @@ async function onSongChange(title, artist, duration, expectStart = true) {
   try {
     const result = await LyricsProvider.getLyrics({ title, artist, duration });
     if (id !== fetchId) return; // user already skipped to another song
+    Panel.setTrack(trackInfo(title, artist)); // the cover often lands after the title
     if (!result) {
-      Panel.showMessage("No lyrics found for this song 🙁", title);
+      Panel.showNotice({
+        title: "No lyrics for this song yet",
+        detail: "LRCLIB, the free lyrics library this panel reads from, doesn't have it. If this is a music video, the song version is more likely to be listed.",
+      });
     } else if (result.instrumental) {
-      Panel.showMessage("Instrumental track — nothing to sing 🎹", title);
+      Panel.showNotice({ title: "Instrumental", detail: "This track has no lyrics to follow." });
     } else if (result.synced) {
       lines = result.synced;
       console.log(`${LOG} Synced lyrics loaded: ${lines.length} lines (matched "${result.matched}").`);
@@ -116,8 +137,8 @@ async function onSongChange(title, artist, duration, expectStart = true) {
         const diff = duration - result.matchedDuration;
         const gap = Math.round(Math.abs(diff));
         driftHint = diff > 0
-          ? `This version runs ${gap}s longer than any lyrics on file — usually a music video or extended mix with an intro.`
-          : `Closest lyrics run ${gap}s longer than this track, so timing may drift.`;
+          ? `This version is ${gap}s longer than the lyrics on file — usually a music video or extended mix with an intro.`
+          : `These lyrics come from a version ${gap}s longer than this one, so timing may drift.`;
         // Longer track = padding, and padding is nearly always at the start,
         // so shifting the whole file by the difference usually lands it.
         // Offered as one click rather than applied: the extra could be an outro.
@@ -133,7 +154,17 @@ async function onSongChange(title, artist, duration, expectStart = true) {
   } catch (err) {
     if (id === fetchId) {
       console.log(`${LOG} Lyrics fetch failed: ${err.message}`);
-      Panel.showMessage(`Lyrics fetch failed: ${err.message}`, title);
+      // Say whose problem it is: a 5xx is LRCLIB having a bad moment (it
+      // happens — retrying shortly usually works); anything else is the
+      // request not getting through.
+      const serverSide = /HTTP 5\d\d/.test(err.message);
+      Panel.showNotice({
+        title: "Lyrics didn't load",
+        detail: serverSide
+          ? "LRCLIB, the lyrics library, is having trouble right now. Try again in a moment."
+          : "Couldn't reach LRCLIB, the lyrics library. Check your connection, then try again.",
+        retry: true,
+      });
     }
   }
 }
@@ -222,7 +253,8 @@ function detect() {
       pendingSince = Date.now();
       lines = null;
       lineIndex = -1;
-      Panel.showMessage("Searching lyrics…", title);
+      Panel.setTrack(trackInfo(title, artist));
+      Panel.showLoading();
     }
     const firstEver = lastSongKey === null; // page load: media is already correct
     const metadataFresh = metadataStamp >= pendingSince - 2000;
@@ -357,6 +389,20 @@ Panel.onWordClick(({ word, line, rect }) => {
   WordPopup.show({ word, line, rect, songTitle: lastTitle, artist: lastArtist });
 });
 WordPopup.onOpenChange((open) => Panel.setScrollPaused(open));
+
+// "Try again" after a failed fetch: same song, same length. The clock is
+// mid-song by then, so the lyrics follow it straight away.
+Panel.onRetry(() => onSongChange(lastTitle, lastArtist, fetchedDuration, false));
+
+// Words already in your list wear a highlighter mark in every song. The list
+// changes when you save a word, delete one, or a sync brings in words saved
+// on the phone — all three arrive through VocabStore.onChange.
+async function refreshSavedWords() {
+  const all = await VocabStore.getAll();
+  Panel.setSavedWords(new Set(all.map((e) => MeaningProvider.normalize(e.word))));
+}
+refreshSavedWords();
+VocabStore.onChange(refreshSavedWords);
 
 // Sync bar: shift this song's lyrics earlier or later, remembered per song so
 // each awkward track only needs fixing once. null = back to zero.

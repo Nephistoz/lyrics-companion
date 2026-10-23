@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<!-- dev/vocab-preview.html — the real extension/vocab.html in an iframe, with
+     chrome.storage stubbed by sample data and the sync config left out (so
+     nothing reaches Supabase). Add ?theme=light to see the light theme.
+     Songs, lines and words below are placeholders written for this page. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Your words preview</title>
+  <style>
+    body { margin: 0; padding: 24px; background: #2a2a2a; }
+    iframe { width: 380px; height: 560px; border: 0; border-radius: 10px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+  </style>
+</head>
+<body>
+  <iframe id="frame" title="Your words"></iframe>
+  <script>
+    const theme = new URLSearchParams(location.search).get("theme") || "dark";
+    const DATA = {
+      settings: { theme, accent: "#FFB454" },
+      vocab: [
+        { id: "5", word: "exits", translation: "salidas", meaning: "Ways out of a place; on a highway, the ramps that leave it.", songTitle: "Streetlight Static", artist: "The Midnight Notebooks", lyricLine: "Counting exits like they owe me something" },
+        { id: "4", word: "reminiscing", translation: "recordando", meaning: "Recalling the past in a fond or nostalgic way.", songTitle: "Streetlight Static", artist: "The Midnight Notebooks", lyricLine: "Half awake and reminiscing in the rain" },
+        { id: "3", word: "highway", translation: "autopista", meaning: "A main road, especially one connecting major towns.", songTitle: "Streetlight Static", artist: "The Midnight Notebooks", lyricLine: "Every highway sounds like your name" },
+        { id: "2", word: "chorus", translation: "coro", meaning: "The part of a song that is repeated after each verse.", songTitle: "Paper Planes in June", artist: "Lowlight & Kite", lyricLine: "Sing the chorus like you mean it this time" },
+        { id: "1", word: "gettin", translation: "consiguiendo", meaning: "Obtaining; acquiring.", songTitle: "Basement Tapes", artist: "Ortega Twins", lyricLine: "We been gettin' by on borrowed light" },
+      ],
+    };
+    const stub = `<script>
+      const DATA = ${JSON.stringify(DATA)};
+      window.chrome = { storage: {
+        local: {
+          get: async (k) => ({ [k]: DATA[k] }),
+          set: async (o) => { Object.assign(DATA, o); },
+        },
+        onChanged: { addListener() {} },
+      } };
+    <\/script>`;
+    fetch("../extension/vocab.html", { cache: "no-store" }) // always the file as it is now
+      .then((r) => r.text())
+      .then((html) => {
+        html = html
+          .replace('<script src="config.js"><\/script>', "")
+          .replace("<head>", `<head><base href="${new URL("../extension/", location.href)}">${stub}`);
+        document.getElementById("frame").srcdoc = html;
+      });
+  </script>
+</body>
+</html>

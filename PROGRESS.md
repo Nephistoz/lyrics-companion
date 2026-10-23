@@ -18,6 +18,7 @@
 | M6.8 | Padded versions (video/extended edits): one-click Align | 🔨 Built — awaiting verification |
 | M6.9 | Track-change desync: the clock-start invariant + tests | ✅ No longer starts mid-song |
 | M6.10 | Clock validated against the player bar (stalled-element bug) | 🔨 Built — awaiting verification |
+| M8 | UX redesign v2: design system, signature highlighter marks, live-preview settings | 🔨 Built 2026-10-23 — awaiting Robi's verification |
 | M7 | (stretch) Phone auto-detection, publishing questions | ⬜ |
 
 ## Project structure
@@ -29,6 +30,7 @@ lyrics-companion/     (git repo, main branch — public on GitHub for Pages)
 ├── companion/        ← M5: phone app (flashcards + search), reuses ../extension modules
 │   ├── index.html / styles.css / app.js
 ├── tests/            ← plain-node regression tests (no deps): lyrics matching + track changes
+├── dev/              ← design harnesses: panel-preview.html + vocab-preview.html (real UI code, stub data)
 ├── CLAUDE.md      ← master prompt / spec (decisions, milestones)
 ├── PROGRESS.md    ← this file
 └── extension/            ← Chrome extension (load this folder unpacked)
@@ -41,7 +43,10 @@ lyrics-companion/     (git repo, main branch — public on GitHub for Pages)
     ├── vocabStore.js     ← M4/M5: local-first store (chrome.storage) mirrored to Supabase
     ├── panel.js          ← M3: lyrics panel UI + M4: tappable word spans
     ├── wordPopup.js      ← M4: tap-a-word popup (translation, definition, Save)
-    ├── panel.css         ← panel + popup styling (lc- prefix, dark, YT-Music-ish)
+    ├── panel.css         ← all injected UI styling (lc- prefix): panel, settings, word card, pill
+    ├── offsetStore.js    ← per-song timing nudges
+    ├── settingsStore.js  ← display settings
+    ├── fonts/            ← Bricolage Grotesque + Literata Italic (OFL, bundled latin woff2)
     ├── vocab.html/.js    ← M4: saved-words list (toolbar popup) + M5: sync-on-open
     └── content.js        ← orchestrator: detection (M1) → fetch (M2) → panel (M3) → capture (M4)
 ```
@@ -66,7 +71,7 @@ lyrics-companion/     (git repo, main branch — public on GitHub for Pages)
 - Language pair (2026-07-14): learning **English**, native **Spanish**. Definitions = Free Dictionary API (per spec). Translation = **Lingva** (Robi's choice) with an instance list — dialectapp.org was the only healthy mirror on 2026-07-14 (lingva.ml & friends had broken upstreams) — and **MyMemory as automatic last resort**. All lookups have 4s timeouts; definition and translation fail independently.
 - Word capture details: words tokenized with apostrophe-friendly regex ("don't", "gettin'" = one word); slang "…in'" retries the dictionary with "…ing"; Google's echo-back of unknown words is discarded when the dictionary also found nothing (protects real cognates). Vocabulary list lives in the toolbar-icon popup (`action.default_popup`), newest first, with delete buttons (small extra beyond spec — needed to clean up mis-taps while testing).
 
-## M6 design system (2026-07-14)
+## M6 design system (2026-07-14) — superseded by v2 below
 
 - **Tokens:** indigo-tinted charcoal dark theme (`#14141B` base — deliberately not YT's pure black) / warm-paper light theme; user accent (5 swatches, default amber `#FFB454`); Space Grotesk (OFL, 22KB latin woff2 bundled in `extension/fonts/`, loaded via `chrome-extension://__MSG_@@extension_id__/` in panel.css and web_accessible_resources). All colors flow through `--lc-*` CSS variables that `Panel.applySettings()` sets on `<body>`.
 - **Settings** (`settingsStore.js`, chrome.storage.local, live-applied): theme, accent, font (grotesk/system/serif/mono stacks), size (S/M/L/XL), highlight (Glow/Spotlight/Classic), Spanish-under-each-line, blur-upcoming self-test. Gear ⚙ in the panel header opens the drawer.
@@ -132,6 +137,36 @@ Next report: song playing at 0:28, lyrics loaded, **nothing highlighted at all**
 
 Hold release also accepts "the player bar shows the track at its start" as proof, and the escape hatch dropped 30s → 12s. `tests/track-change.test.js` now covers a stalled element alongside a live one, and the no-element-agrees fallback (7 cases, all green).
 
+## Design system v2 (2026-10-23) — read before touching any UI
+
+Robi asked for a redesign that "prioritizes the user, modern interfaces and aesthetics". The v1 problems it fixes: every non-current line was the same grey (no sense of where you are), the header showed the LRCLIB match (diagnostic) instead of the song, the settings drawer covered the lyrics it was changing (no live preview), the same word could be saved twice, emoji icons (⚙ ✕ 🎵 ★), tracked-out ALL-CAPS section labels, and dead-end error strings.
+
+**Rules**
+- The lyrics are the hero; chrome stays quiet.
+- **Accent = "yours"**: saved-word marks, primary actions, the Glow line (the user's own choice). Not decoration.
+- **Literata italic = Spanish, always** (line translations, word-card translation, vocab list, companion). Never italicize English — part-of-speech labels and the companion's lyric line were moved off italics to keep the rule honest.
+- Sentence case, plain verbs, no ALL CAPS, no middle-dot meta strings. Save → "Saved" (same verb through the flow).
+
+**Tokens** (`THEMES` in panel.js, mirrored in vocab.js and companion/styles.css)
+- Dark: Night `#1A1722` (panel bg at user opacity), Raised `#231F2D` (popovers), Chip `#3A3447` (segmented on-state), Ink `#F5F2FA`, Haze `#A39DB2`, Rule 9% / 17% ink.
+- Light: Paper `#F8F6FB`, Raised `#FFFFFF`, Ink `#1D1926`, Haze `#6B6478`, Rule 8% / 16%.
+- Accent variants computed in `applySettings`: `--lc-accent-soft` (Glow halo, 35%), `--lc-mark` (highlighter: 36% dark / 45% light), `--lc-mark-faint` (marks on the active line), `--lc-on-accent` (ink or white, whichever has more WCAG contrast — works for any custom color).
+- Type: Bricolage Grotesque (variable; lyrics at 560, UI 550–700) + Literata Italic (Spanish). Family names prefixed `LC …` so a locally installed copy can't interfere. Sizes S/M/L/XL = 16/19/22/26px; spacing Tight/Cozy/Airy = 10/18/28px. Radii by role: panel 18, popovers 14–16, controls 9–10, cover 8, pills 999.
+
+**Signature: saved words wear a highlighter stroke in every song.** `Panel.setSavedWords(set)` marks spans by `MeaningProvider.normalize` (now exported — the one word key). content.js feeds it from `VocabStore.onChange` (new: chrome.storage.onChanged on "vocab"), so a save in the card, a delete in the list, and a phone sync all flow through one path. Marks added while lyrics are on screen sweep in (`lc-sweep`, 0.6s — the one orchestrated motion); the session's first list applies quietly.
+
+**Layout & states**
+- Header: cover art (player-bar thumbnail upsized to 120px via `readArt()`), cleaned title, artist; LRCLIB match only as the title's tooltip.
+- Line tiers in pure CSS (`.lc-playing` + `:not(.active ~ .lc-line)`): sung 0.32, current 1, next 0.8, upcoming 0.55. Opacity only → no reflow. Edges of the lyric area fade via mask-image.
+- Settings and the word card open **beside** the panel (`Panel.placeBeside`: left, else right, else over), so changes preview live. Settings close on Escape / outside click; clicks on the lyrics keep them open.
+- States: skeleton while loading; `showNotice({title, detail, retry})` for no lyrics / instrumental / errors — errors distinguish LRCLIB 5xx ("having trouble, try again in a moment") from network failures, and offer **Try again** (`Panel.onRetry` → refetch with `expectStart=false`). Plain lyrics carry a note that they won't follow the song.
+- Timing footer: "Timing ‹ 0.0s ›" stepper; offset value resets on click; drift notice + accent "Shift lyrics +31s" button appear only while unresolved.
+- Word card: dictionary-entry layout; shows "In your words, saved from …" instead of a second Save.
+- "Your words" (toolbar popup): grouped by song, lyric line with the word marked, scrolls inside `<main>` (page scrolling pushed out a horizontal scrollbar).
+- Quality floor: focus-visible rings, aria-labels on icon buttons, role=switch toggles, `prefers-reduced-motion` honoured.
+
+**Verifying UI without loading the extension:** serve the repo root (`python -m http.server 8766`) and open `/dev/panel-preview.html` (buttons drive every state) or `/dev/vocab-preview.html` (`?theme=light`). They run the real panel.css/panel.js/wordPopup.js and vocab.html with stub data; only the `chrome-extension://` font URLs fail there, by design. Gotcha: the browser pane throttles animations when backgrounded — freeze transitions before trusting a screenshot.
+
 ## Known issues / notes
 
 - Artist parsing is naive: byline "Artist • Album • Year" split on the first "•". Multi-artist strings ("A & B") come through as-is — fine for lyrics search, revisit if LRCLIB matching suffers.
@@ -146,6 +181,7 @@ Hold release also accepts "the player bar shows the track at its start" as proof
 
 ## Next up
 
-1. Robi verifies M6: change EVERY setting, reload the page, confirm each one survived. Try both themes, all three highlight styles, translations toggle, self-test blur.
-2. `git push` to publish the redesigned companion to GitHub Pages.
-3. Then M7 (stretch): phone auto-detection notes + the improvement backlog above.
+1. Robi verifies M8 on the live site: reload the extension, check every state (song change, saving a word → mark sweeps in, settings beside the panel, "Your words" grouping, light theme).
+2. `git push` to publish the restyled companion to GitHub Pages.
+3. Candidates raised during M8 (not built): pronunciation audio in the word card (dictionaryapi.dev already returns audio URLs), a filter box in "Your words" once the list grows, `/api/get` 5xx falling through to `/api/search` instead of erroring.
+4. Then M7 (stretch): phone auto-detection notes + the improvement backlog above.

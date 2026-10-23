@@ -1,13 +1,137 @@
 /* panel.css — injected via manifest.json into music.youtube.com.
-   Everything is prefixed lc- (Lyrics Companion) to never collide with
-   YouTube's styles. All colors/type flow through CSS variables that
-   panel.js sets on <body> from the user's settings. */
+   Everything is prefixed lc- (Lyrics Companion) so it never collides with
+   YouTube's styles. Colors and type flow through --lc-* variables that
+   panel.js sets on <body> from the user's settings.
+
+   Design rules, in short:
+   - The lyrics are the hero; chrome stays quiet around them.
+   - The accent means "yours": saved words, primary actions, your highlight.
+   - Anything in Spanish is set in Literata italic — your language, marked
+     the way a bilingual edition marks its translation.
+   - Saved words wear a highlighter mark in every song: the signature. */
 
 @font-face {
-  font-family: "Space Grotesk";
-  src: url("chrome-extension://__MSG_@@extension_id__/fonts/SpaceGrotesk.woff2") format("woff2");
-  font-weight: 300 700;
+  font-family: "LC Bricolage";
+  src: url("chrome-extension://__MSG_@@extension_id__/fonts/BricolageGrotesque.woff2") format("woff2");
+  font-weight: 200 800;
+  font-stretch: 75% 100%;
   font-display: swap;
+}
+
+@font-face {
+  font-family: "LC Literata";
+  src: url("chrome-extension://__MSG_@@extension_id__/fonts/LiterataItalic.woff2") format("woff2");
+  font-weight: 300 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* ---- shared ---- */
+
+#lc-panel,
+#lc-panel *,
+#lc-settings,
+#lc-settings *,
+#lc-popup,
+#lc-popup *,
+#lc-toggle {
+  box-sizing: border-box;
+}
+
+/* Every button we draw starts from nothing, so YouTube's own button styles
+   can't leak in. Variants below come later and add back what they need. */
+.lc-btn {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.lc-btn:focus-visible,
+.lc-switch:focus-visible,
+.lc-range:focus-visible {
+  outline: 2px solid var(--lc-accent);
+  outline-offset: 2px;
+}
+.lc-btn[disabled] {
+  cursor: default;
+}
+
+.lc-svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 32px square icon button: header actions, popover close */
+.lc-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 9px;
+  color: var(--lc-haze);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.lc-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.lc-icon:hover,
+.lc-icon[aria-expanded="true"] {
+  color: var(--lc-ink);
+  background-color: var(--lc-rule);
+}
+
+/* the one filled button: an action on something of yours */
+.lc-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--lc-accent);
+  color: var(--lc-on-accent);
+  font-size: 13.5px;
+  font-weight: 650;
+  line-height: 1;
+  transition: filter 0.15s ease;
+}
+.lc-primary svg {
+  width: 16px;
+  height: 16px;
+}
+.lc-primary:hover {
+  filter: brightness(1.08);
+}
+.lc-primary[disabled] {
+  opacity: 0.6;
+}
+
+/* outlined secondary button: reset, try again */
+.lc-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--lc-rule-strong);
+  color: var(--lc-ink);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1;
+  transition: background-color 0.15s ease;
+}
+.lc-quiet svg {
+  width: 15px;
+  height: 15px;
+}
+.lc-quiet:hover {
+  background-color: var(--lc-rule);
 }
 
 /* ---- panel frame ---- */
@@ -17,33 +141,35 @@
   top: 80px;    /* below YT Music's 64px top bar (until the user moves it) */
   right: 16px;
   bottom: 96px; /* above the 72px player bar */
-  width: 340px;
-  min-width: 260px;
-  min-height: 220px;
-  max-width: 640px;
+  width: 360px;
+  min-width: 280px;
+  min-height: 240px;
+  max-width: 680px;
   resize: both; /* native resize handle, bottom-right corner */
   z-index: 9999;
   display: flex;
   flex-direction: column;
-  background: var(--lc-bg, rgba(18, 18, 24, 0.92));
-  backdrop-filter: blur(16px) saturate(1.15);
-  -webkit-backdrop-filter: blur(16px) saturate(1.15);
-  border: 1px solid var(--lc-line, rgba(255, 255, 255, 0.09));
-  border-radius: 16px;
-  box-shadow: var(--lc-shadow, 0 18px 50px rgba(0, 0, 0, 0.55));
-  font-family: var(--lc-font, "Space Grotesk", sans-serif);
-  color: var(--lc-text, #f2f0eb);
+  background: var(--lc-bg);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid var(--lc-rule);
+  border-radius: 18px;
+  box-shadow: var(--lc-shadow);
+  font-family: var(--lc-ui);
+  color: var(--lc-ink);
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* header: the song, plus two actions. Doubles as the drag handle. */
 #lc-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--lc-line, rgba(255, 255, 255, 0.09));
+  gap: 11px;
   flex: none;
-  cursor: grab; /* the header doubles as the drag handle */
+  padding: 12px 10px 12px 12px;
+  border-bottom: 1px solid var(--lc-rule);
+  cursor: grab;
   user-select: none;
   touch-action: none;
 }
@@ -51,32 +177,43 @@
   cursor: grabbing;
 }
 
-#lc-title {
+#lc-art {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--lc-rule);
+  -webkit-user-drag: none;
+}
+#lc-art[hidden] {
+  display: none;
+}
+
+#lc-track {
   flex: 1;
-  font-size: 12.5px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--lc-dim, #8b8b98);
+  min-width: 0;
+}
+
+#lc-title,
+#lc-artist {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-#lc-gear,
-#lc-close {
-  all: unset;
-  cursor: pointer;
-  color: var(--lc-dim, #8b8b98);
-  font-size: 14px;
-  padding: 2px 6px;
-  border-radius: 6px;
+#lc-title {
+  font-size: 14.5px;
+  font-weight: 640;
+  line-height: 1.25;
+  letter-spacing: -0.005em;
 }
-#lc-gear:hover,
-#lc-close:hover {
-  color: var(--lc-text, #fff);
-}
-#lc-gear.open {
-  color: var(--lc-accent, #ffb454);
+
+#lc-artist {
+  margin-top: 1px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  color: var(--lc-haze);
 }
 
 /* ---- lyrics ---- */
@@ -85,379 +222,625 @@
   position: relative; /* makes each line's offsetTop relative to this box */
   flex: 1;
   overflow-y: auto;
-  padding: 18px;
+  padding: 22px 22px 0;
   scrollbar-width: thin;
-  scrollbar-color: var(--lc-line, rgba(255, 255, 255, 0.2)) transparent;
+  scrollbar-color: var(--lc-rule-strong) transparent;
+  /* lines dissolve into the header and footer instead of being sliced */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 calc(100% - 30px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 calc(100% - 30px), transparent 100%);
+}
+/* room under the last line, so the closing lines can reach the middle */
+#lc-lines::after {
+  content: "";
+  display: block;
+  height: 40%;
 }
 
+/* Where you are in the song, by brightness alone: lines already sung recede
+   furthest, the next line stays readable so you can see it coming, and the
+   current one leads. Before the first line lands, everything waits at the
+   "upcoming" level. Opacity only — nothing reflows, nothing jitters. */
 .lc-line {
-  margin: 0 0 var(--lc-gap, 15px);
+  margin: 0 0 var(--lc-gap);
+  opacity: 0.55;
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+.lc-playing .lc-line:not(.active):not(.active ~ .lc-line) {
+  opacity: 0.32;
+}
+.lc-line.active + .lc-line {
+  opacity: 0.8;
+}
+.lc-line.active {
+  opacity: 1;
 }
 
 .lc-main {
   margin: 0;
-  font-size: var(--lc-size, 17px);
-  line-height: 1.55;
-  text-align: var(--lc-align, left);
-  color: var(--lc-dim, #8b8b98);
-  transition: color 0.25s ease, transform 0.25s ease, opacity 0.25s ease, filter 0.3s ease;
-  transform-origin: var(--lc-origin, left center);
+  font-family: var(--lc-font);
+  font-size: var(--lc-size);
+  font-weight: 560;
+  line-height: 1.3;
+  letter-spacing: -0.012em;
+  text-align: var(--lc-align);
+  color: var(--lc-ink);
+  transform-origin: var(--lc-origin);
+  transition: color 0.3s ease, transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), text-shadow 0.3s ease;
 }
 
-/* the signature: a hairline under the active line that fills in real time
-   as the line is sung (width driven by --lc-progress from playback) */
+/* progress hairline: fills under the current line as it is sung */
 .lc-main::after {
   content: "";
   display: block;
-  height: 2px;
   width: 0;
-  margin: 5px var(--lc-hairline-margin, 0) 0;
+  height: 2px;
+  margin: 7px var(--lc-hairline-margin) 0;
   border-radius: 2px;
-  background: linear-gradient(90deg, var(--lc-accent, #ffb454), transparent);
+  background: linear-gradient(90deg, var(--lc-accent), transparent);
   transition: width 0.12s linear;
 }
 .lc-line.active .lc-main::after {
   width: var(--lc-progress, 0%);
 }
-.hl-classic .lc-main::after {
-  display: none; /* classic = quiet */
+
+/* empty LRC lines: an instrumental breath */
+.lc-breath {
+  color: var(--lc-haze);
+  letter-spacing: 0.3em;
 }
 
-/* Spanish sub-lines (settings toggle adds .lc-subs on the panel) */
+/* the Spanish translation track */
 .lc-sub {
   display: none;
-  margin-top: 3px;
-  font-size: calc(var(--lc-size, 17px) * 0.78);
-  line-height: 1.4;
-  text-align: var(--lc-align, left);
-  color: var(--lc-dim, #8b8b98);
-  opacity: 0.85;
+  margin-top: 4px;
+  font-family: var(--lc-es);
   font-style: italic;
+  font-weight: 400;
+  font-size: calc(var(--lc-size) * 0.76);
+  line-height: 1.4;
+  text-align: var(--lc-align);
+  color: var(--lc-haze);
+  transition: color 0.3s ease;
 }
 .lc-subs .lc-sub:not(:empty) {
   display: block;
 }
-.lc-subs .lc-line.active .lc-sub {
-  color: var(--lc-accent, #ffb454);
-  opacity: 1;
+.lc-line.active .lc-sub {
+  color: var(--lc-ink);
 }
 
-/* highlight style: GLOW — the line lights up in the accent */
+/* current line, three ways (Settings → Current line) */
 .hl-glow .lc-line.active .lc-main {
-  color: var(--lc-accent, #ffb454);
-  text-shadow: 0 0 26px var(--lc-accent-glow, rgba(255, 180, 84, 0.35));
-  transform: scale(1.04);
-  font-weight: 600;
+  color: var(--lc-accent);
+  text-shadow: 0 0 28px var(--lc-accent-soft);
+  transform: scale(1.035);
 }
 
-/* highlight style: SPOTLIGHT — the room goes dark, the line stays lit */
+.hl-spotlight .lc-line:not(.active) {
+  filter: blur(0.8px);
+}
 .hl-spotlight .lc-line:not(.active) .lc-main {
-  opacity: 0.3;
-  filter: blur(0.6px);
+  color: var(--lc-haze);
 }
 .hl-spotlight .lc-line.active .lc-main {
-  color: var(--lc-text, #f2f0eb);
-  transform: scale(1.04);
-  font-weight: 600;
+  transform: scale(1.035);
 }
 
-/* highlight style: CLASSIC — just bold, nothing moves */
-.hl-classic .lc-line.active .lc-main {
-  color: var(--lc-text, #f2f0eb);
-  font-weight: 700;
+.hl-classic .lc-main::after {
+  display: none; /* simple = no moving parts */
 }
 
-/* self-test mode: lines not sung yet are blurred until they arrive */
-.lc-selftest .lc-line.active ~ .lc-line .lc-main,
-.lc-selftest .lc-line.active ~ .lc-line .lc-sub {
-  filter: blur(6px);
-}
-
-.lc-static .lc-main {
-  color: var(--lc-text, #d6d6d6);
-  opacity: 0.85;
-}
-
-.lc-message {
-  color: var(--lc-dim, #8b8b98);
-  font-size: 14px;
+/* quiz mode: lines stay blurred until they are sung */
+.lc-selftest #lc-lines:not(.lc-playing) .lc-line,
+.lc-selftest .lc-line.active ~ .lc-line {
+  filter: blur(7px);
 }
 
 /* tappable words */
 .lc-word {
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
 }
 .lc-word:hover {
-  background: var(--lc-accent-glow, rgba(255, 255, 255, 0.18));
+  background-color: var(--lc-rule-strong);
 }
 
-/* ---- sync bar: nudge a song's lyrics earlier or later ---- */
+/* THE SIGNATURE: a highlighter stroke under every word you have saved, in
+   every song. Saving one sweeps the stroke in left to right, the way you'd
+   mark a word on a printed lyric sheet. */
+.lc-saved {
+  background-image: linear-gradient(
+    transparent 56%,
+    var(--lc-mark) 56%,
+    var(--lc-mark) 94%,
+    transparent 94%
+  );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+.lc-line.active .lc-saved {
+  --lc-mark: var(--lc-mark-faint); /* keep accent-on-accent readable in Glow */
+}
+.lc-sweep {
+  animation: lc-sweep 0.6s cubic-bezier(0.3, 0.7, 0.2, 1) both;
+}
+@keyframes lc-sweep {
+  from {
+    background-size: 0% 100%;
+  }
+  to {
+    background-size: 100% 100%;
+  }
+}
 
-#lc-sync {
+/* ---- loading, empty and error states ---- */
+
+.lc-skeleton i {
+  display: block;
+  height: calc(var(--lc-size) * 0.85);
+  margin: 0 0 calc(var(--lc-gap) + 9px);
+  border-radius: 6px;
+  background: var(--lc-rule);
+  animation: lc-pulse 1.4s ease-in-out infinite;
+}
+.lc-skeleton i:nth-child(1) { width: 74%; }
+.lc-skeleton i:nth-child(2) { width: 90%; animation-delay: 0.1s; }
+.lc-skeleton i:nth-child(3) { width: 58%; animation-delay: 0.2s; }
+.lc-skeleton i:nth-child(4) { width: 82%; animation-delay: 0.3s; }
+.lc-skeleton i:nth-child(5) { width: 66%; animation-delay: 0.4s; }
+@keyframes lc-pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.lc-notice {
+  max-width: 32ch;
+  padding-top: 6px;
+}
+.lc-notice-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 640;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.lc-notice-detail {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--lc-haze);
+}
+.lc-notice .lc-quiet {
+  margin-top: 16px;
+}
+
+.lc-plain-note {
+  margin: 0 0 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--lc-rule);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--lc-haze);
+}
+
+/* ---- footer: timing ---- */
+
+#lc-foot {
+  flex: none;
+  padding: 8px 10px 9px 16px;
+  border-top: 1px solid var(--lc-rule);
+}
+#lc-foot[hidden] {
+  display: none;
+}
+
+#lc-drift {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 4px 0 11px;
+}
+#lc-drift[hidden] {
+  display: none;
+}
+#lc-drift-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--lc-haze);
+}
+#lc-align[hidden] {
+  display: none;
+}
+
+#lc-timing {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex: none;
-  padding: 8px 12px;
-  border-top: 1px solid var(--lc-line, rgba(255, 255, 255, 0.09));
+  justify-content: space-between;
+  gap: 10px;
+}
+#lc-timing-label {
+  font-size: 12.5px;
+  color: var(--lc-haze);
 }
 
-#lc-sync button {
-  all: unset;
-  cursor: pointer;
-  padding: 4px 10px;
-  border-radius: 7px;
-  font-size: 12px;
-  color: var(--lc-dim, #8b8b98);
-  background: var(--lc-line, rgba(255, 255, 255, 0.09));
+.lc-stepper {
+  display: flex;
+  align-items: center;
+  border-radius: 10px;
+  background: var(--lc-rule);
 }
-#lc-sync button:hover {
-  color: var(--lc-text, #f2f0eb);
+.lc-step {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  border-radius: 9px;
+  color: var(--lc-haze);
 }
-
-#lc-sync-value {
-  flex: 1;
+.lc-step svg {
+  width: 16px;
+  height: 16px;
+}
+.lc-step:hover {
+  color: var(--lc-ink);
+}
+#lc-offset {
+  min-width: 58px;
+  height: 28px;
+  padding: 0 4px;
   text-align: center;
-  background: none !important;
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 28px;
   font-variant-numeric: tabular-nums;
+  color: var(--lc-haze);
+  cursor: default;
 }
-#lc-sync.warn #lc-sync-value {
-  color: var(--lc-accent, #ffb454);
+#lc-offset.lc-shifted {
+  color: var(--lc-accent);
+  cursor: pointer;
 }
 
-/* ---- settings drawer (covers the lyrics area) ---- */
+/* ---- collapsed: a pill that brings the panel back ---- */
+
+#lc-toggle {
+  position: fixed;
+  right: 16px;
+  bottom: 96px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px 0 13px;
+  border-radius: 999px;
+  border: 1px solid var(--lc-rule);
+  background: var(--lc-bg);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: var(--lc-shadow);
+  color: var(--lc-ink);
+  font-family: var(--lc-ui);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+#lc-toggle svg {
+  width: 17px;
+  height: 17px;
+}
+#lc-toggle:hover {
+  border-color: var(--lc-rule-strong);
+}
+
+/* ---- popovers: settings and the word card sit BESIDE the panel ---- */
+
+#lc-settings,
+#lc-popup {
+  position: fixed;
+  border: 1px solid var(--lc-rule);
+  background: var(--lc-raised);
+  box-shadow: var(--lc-shadow);
+  font-family: var(--lc-ui);
+  color: var(--lc-ink);
+  -webkit-font-smoothing: antialiased;
+  animation: lc-appear 0.16s ease-out;
+}
+#lc-settings[hidden],
+#lc-popup[hidden] {
+  display: none;
+}
+@keyframes lc-appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+}
+
+/* ---- settings ---- */
 
 #lc-settings {
-  position: absolute;
-  top: 45px; /* under the header */
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 2;
+  z-index: 10000;
+  width: 324px;
+  max-height: calc(100vh - 16px);
   overflow-y: auto;
-  padding: 16px 18px;
-  background: var(--lc-bg, rgba(18, 18, 24, 0.92));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  padding: 10px 16px 18px;
+  border-radius: 16px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--lc-rule-strong) transparent;
 }
 
-.lc-set-section {
-  margin: 18px 0 10px;
-  font-size: 10.5px;
+.lc-set-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-right: -8px;
+}
+.lc-set-title {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+}
+
+.lc-set-h {
+  margin: 18px 0 6px;
+  font-size: 12.5px;
   font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--lc-accent, #ffb454);
-}
-.lc-set-section:first-child {
-  margin-top: 2px;
-}
-
-.lc-set-hint {
-  margin: 4px 0 0;
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--lc-dim, #8b8b98);
+  color: var(--lc-haze);
 }
 
 .lc-set-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 12px;
+  min-height: 38px;
+}
+.lc-set-label {
+  font-size: 13.5px;
+  line-height: 1.3;
+}
+.lc-set-desc {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--lc-haze);
+}
+.lc-set-value {
+  min-width: 34px;
+  text-align: right;
+  font-size: 12.5px;
+  color: var(--lc-haze);
+  font-variant-numeric: tabular-nums;
 }
 
-.lc-set-row input[type="range"] {
-  width: 130px;
-  accent-color: var(--lc-accent, #ffb454);
-  cursor: pointer;
+/* segmented control */
+.lc-seg {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--lc-rule);
+}
+.lc-seg-btn {
+  padding: 5px 9px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 1.2;
+  color: var(--lc-haze);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.lc-seg-btn:hover {
+  color: var(--lc-ink);
+}
+.lc-seg-btn.on {
+  background: var(--lc-chip);
+  color: var(--lc-ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
 }
 
-.lc-color {
+/* accent swatches + the free color picker */
+.lc-swatches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lc-swatch {
   width: 22px;
   height: 22px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+.lc-swatch.on,
+.lc-custom.on {
+  box-shadow: 0 0 0 2px var(--lc-raised), 0 0 0 4px var(--lc-ink);
+}
+.lc-custom {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 2px;
+  border-radius: 50%;
+  background: conic-gradient(#ff5c5c, #ffb454, #a6f750, #4dd8ff, #b794ff, #ff6ec7, #ff5c5c);
+  cursor: pointer;
+}
+.lc-custom input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
   padding: 0;
-  border: none;
-  border-radius: 6px;
+  border: 2px solid var(--lc-raised);
+  border-radius: 50%;
   background: none;
   cursor: pointer;
 }
-
-.lc-reset {
-  all: unset;
-  cursor: pointer;
-  padding: 5px 12px;
-  border-radius: 8px;
-  font-size: 12.5px;
-  color: var(--lc-text, #f2f0eb);
-  background: var(--lc-line, rgba(255, 255, 255, 0.09));
-}
-.lc-reset:hover {
-  background: var(--lc-accent, #ffb454);
-  color: var(--lc-surface, #1c1c26);
-}
-
-.lc-set-label {
-  font-size: 13px;
-  color: var(--lc-text, #f2f0eb);
-}
-
-.lc-seg {
-  display: flex;
-  gap: 6px;
-}
-
-.lc-seg button {
-  all: unset;
-  cursor: pointer;
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 12.5px;
-  color: var(--lc-dim, #8b8b98);
-  background: var(--lc-line, rgba(255, 255, 255, 0.09));
-}
-.lc-seg button.on {
-  color: var(--lc-surface, #1c1c26);
-  background: var(--lc-accent, #ffb454);
-  font-weight: 600;
-}
-
-.lc-seg .lc-swatch {
-  width: 20px;
-  height: 20px;
+.lc-custom input::-webkit-color-swatch-wrapper {
   padding: 0;
+}
+.lc-custom input::-webkit-color-swatch {
+  border: none;
   border-radius: 50%;
-  border: 2px solid transparent;
-}
-.lc-seg .lc-swatch.on {
-  border-color: var(--lc-text, #fff);
 }
 
-.lc-set-toggle {
+/* switch */
+.lc-switch {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 22px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--lc-rule-strong);
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
-.lc-set-toggle input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--lc-accent, #ffb454);
+.lc-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+.lc-switch:checked {
+  background: var(--lc-accent);
+}
+.lc-switch:checked::after {
+  transform: translateX(14px);
+}
+
+.lc-range {
+  width: 112px;
+  margin: 0;
+  accent-color: var(--lc-accent);
   cursor: pointer;
 }
 
-/* ---- tapped-word popup ---- */
+.lc-set-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--lc-haze);
+}
+
+/* ---- word card ---- */
 
 #lc-popup {
-  position: fixed;
+  z-index: 10001;
   width: 300px;
-  z-index: 10000; /* above the panel */
-  padding: 15px 17px;
-  background: var(--lc-surface, #1d1d26);
-  border: 1px solid var(--lc-line, rgba(255, 255, 255, 0.14));
+  padding: 16px 18px 14px;
   border-radius: 14px;
-  box-shadow: var(--lc-shadow, 0 8px 28px rgba(0, 0, 0, 0.55));
-  font-family: var(--lc-font, "Space Grotesk", sans-serif);
-  color: var(--lc-text, #f2f0eb);
 }
 
-.lc-pop-word {
-  font-size: 18px;
-  font-weight: 700;
-  text-transform: lowercase;
+.lc-pop-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  column-gap: 10px;
 }
-
+.lc-pop-word {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
 .lc-pop-phon {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--lc-dim, #9a9a9a);
+  font-size: 13px;
+  color: var(--lc-haze);
 }
-
 .lc-pop-trans {
   margin-top: 6px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--lc-accent, #ffb454);
-}
-
-.lc-pop-def {
-  margin-top: 8px;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--lc-text, #cfcfcf);
-  opacity: 0.85;
-}
-
-.lc-pop-pos {
-  font-size: 11px;
+  font-family: var(--lc-es);
   font-style: italic;
-  color: var(--lc-dim, #8f8f8f);
-}
-
-.lc-pop-status {
-  margin-top: 6px;
-  font-size: 13px;
-  color: var(--lc-dim, #9a9a9a);
-}
-
-#lc-pop-save {
-  all: unset;
-  margin-top: 12px;
-  padding: 8px 15px;
-  border-radius: 999px;
-  background: var(--lc-accent, #ffb454);
-  color: var(--lc-surface, #17171d);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  display: inline-block;
-}
-#lc-pop-save:hover {
-  filter: brightness(1.1);
-}
-#lc-pop-save:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
-/* ---- floating reopen button ---- */
-
-#lc-toggle {
-  all: unset;
-  position: fixed;
-  right: 16px;
-  bottom: 96px;
-  z-index: 9999;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: var(--lc-bg, rgba(18, 18, 24, 0.92));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--lc-line, rgba(255, 255, 255, 0.12));
   font-size: 20px;
-  text-align: center;
-  line-height: 46px;
-  cursor: pointer;
+  line-height: 1.25;
 }
-#lc-toggle:hover {
-  border-color: var(--lc-accent, #ffb454);
+.lc-pop-sense {
+  margin-top: 12px;
+}
+/* part of speech is English, so it stays in the grotesk: italic serif is
+   reserved for Spanish */
+.lc-pop-pos {
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  color: var(--lc-haze);
+}
+.lc-pop-def {
+  margin-top: 2px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  opacity: 0.88;
+}
+.lc-pop-status {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--lc-haze);
+}
+.lc-pop-loading i {
+  display: block;
+  height: 12px;
+  margin-top: 12px;
+  border-radius: 5px;
+  background: var(--lc-rule);
+  animation: lc-pulse 1.4s ease-in-out infinite;
+}
+.lc-pop-loading i:first-child { width: 46%; height: 18px; }
+.lc-pop-loading i:last-child { width: 84%; }
+
+.lc-pop-foot {
+  display: flex;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--lc-rule);
+}
+.lc-pop-saved {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--lc-haze);
+}
+.lc-pop-saved svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--lc-accent);
 }
 
-/* ---- accessibility ---- */
-
-#lc-panel button:focus-visible,
-#lc-popup button:focus-visible,
-#lc-toggle:focus-visible {
-  outline: 2px solid var(--lc-accent, #ffb454);
-  outline-offset: 2px;
-}
+/* ---- motion, only where it helps ---- */
 
 @media (prefers-reduced-motion: reduce) {
+  .lc-line,
   .lc-main,
-  .lc-main::after {
+  .lc-main::after,
+  .lc-sub,
+  .lc-switch,
+  .lc-switch::after {
     transition: none;
+  }
+  .lc-sweep,
+  .lc-skeleton i,
+  .lc-pop-loading i,
+  #lc-settings,
+  #lc-popup {
+    animation: none;
   }
 }

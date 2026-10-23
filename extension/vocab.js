@@ -1,8 +1,20 @@
-// vocab.js — renders the saved-words list in vocab.html.
+// vocab.js — renders "Your words" in vocab.html.
+//
+// Words are grouped by the song they came from (most recently saved song
+// first), because the song IS the memory hook. Each lyric line marks its word
+// with the same highlighter stroke the panel uses.
 //
 // Everything is built with createElement + textContent (never innerHTML with
 // data in it): lyrics and definitions are text from the internet, and this
 // keeps them from ever being interpreted as HTML.
+
+// mirrors THEMES in panel.js
+const LIGHT = {
+  "--bg": "#f8f6fb",
+  "--ink": "#1d1926",
+  "--haze": "#6b6478",
+  "--rule": "rgba(29, 25, 38, 0.08)",
+};
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -11,58 +23,92 @@ function el(tag, className, text) {
   return node;
 }
 
+// The lyric line, with the saved word wearing its highlighter mark. Same
+// tokenizer and word key as the panel, so "Gettin'" finds "gettin".
+const WORD_RE = /([A-Za-zÀ-ÖØ-öø-ÿ'’]+)/;
+function contextLine(line, word) {
+  const p = el("p", "context");
+  for (const token of line.split(WORD_RE)) {
+    if (!token) continue;
+    if (MeaningProvider.normalize(token) === word) p.appendChild(el("mark", "", token));
+    else p.appendChild(document.createTextNode(token));
+  }
+  return p;
+}
+
+function deleteButton(entry) {
+  const b = el("button", "del");
+  b.type = "button";
+  b.title = "Remove from your words";
+  b.setAttribute("aria-label", `Remove "${entry.word}"`);
+  b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17"/></svg>';
+  b.addEventListener("click", async () => {
+    await VocabStore.remove(entry.id);
+    render();
+  });
+  return b;
+}
+
 async function render() {
   const list = document.getElementById("list");
-  const count = document.getElementById("count");
   const entries = await VocabStore.getAll();
 
-  count.textContent = entries.length ? `(${entries.length})` : "";
-  list.innerHTML = "";
+  document.getElementById("count").textContent = entries.length ? String(entries.length) : "";
+  list.replaceChildren();
 
   if (entries.length === 0) {
-    list.appendChild(
-      el("div", "empty", "Nothing saved yet. Play a song on YouTube Music and tap any word in the lyrics panel to save it here. 🎵")
-    );
+    const empty = el("div", "empty");
+    empty.appendChild(el("h2", "", "No words yet"));
+    const p = el("p", "", "Play a song on YouTube Music and tap any word in the lyrics to save it. Saved words get ");
+    p.appendChild(el("mark", "", "marked"));
+    p.append(" in every song they show up in.");
+    empty.appendChild(p);
+    list.appendChild(empty);
     return;
   }
 
+  // entries arrive newest first, so groups come out ordered by latest save
+  const groups = new Map();
   for (const e of entries) {
-    const entry = el("div", "entry");
+    const key = `${e.songTitle}|${e.artist}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
 
-    const top = el("div", "top");
-    top.appendChild(el("span", "word", e.word));
-    top.appendChild(el("span", "trans", e.translation || ""));
-    const del = el("button", "del", "✕");
-    del.title = "Delete word";
-    del.addEventListener("click", async () => {
-      await VocabStore.remove(e.id);
-      render();
-    });
-    top.appendChild(del);
-    entry.appendChild(top);
+  for (const items of groups.values()) {
+    const { songTitle, artist } = items[0];
+    const section = el("section", "group");
+    const song = el("h2", "song");
+    song.appendChild(el("span", "song-title", songTitle || "Unknown song"));
+    if (artist) song.appendChild(el("span", "song-artist", artist));
+    section.appendChild(song);
 
-    if (e.meaning) entry.appendChild(el("div", "def", e.meaning));
-    if (e.lyricLine) entry.appendChild(el("div", "context", `“${e.lyricLine}”`));
-
-    const when = e.dateAdded ? new Date(e.dateAdded).toLocaleDateString() : "";
-    entry.appendChild(el("div", "song", `${e.songTitle} — ${e.artist} · ${when}`));
-
-    list.appendChild(entry);
+    const ul = el("ul");
+    for (const e of items) {
+      const li = el("li", "entry");
+      const top = el("div", "top");
+      top.appendChild(el("span", "word", e.word));
+      if (e.translation) top.appendChild(el("span", "trans", e.translation));
+      li.appendChild(top);
+      if (e.lyricLine) li.appendChild(contextLine(e.lyricLine, e.word));
+      if (e.meaning) li.appendChild(el("p", "def", e.meaning));
+      li.appendChild(deleteButton(e));
+      ul.appendChild(li);
+    }
+    section.appendChild(ul);
+    list.appendChild(section);
   }
 }
 
-// Follow the same theme + accent the user picked in the lyrics panel.
+// Follow the theme + accent picked in the lyrics panel.
 async function applyTheme() {
   const s = await SettingsStore.get();
-  const r = document.documentElement.style;
+  const root = document.documentElement.style;
   if (s.theme === "light") {
-    r.setProperty("--bg", "#faf7f2");
-    r.setProperty("--surface", "#ffffff");
-    r.setProperty("--text", "#17171d");
-    r.setProperty("--dim", "#6e6e78");
-    r.setProperty("--line", "rgba(23, 23, 29, 0.10)");
+    for (const [k, v] of Object.entries(LIGHT)) root.setProperty(k, v);
   }
-  r.setProperty("--accent", s.accent);
+  root.setProperty("--accent", s.accent);
+  root.setProperty("--mark", s.accent + (s.theme === "light" ? "73" : "5C"));
 }
 
 // Show local data instantly, then sync with the cloud and re-render.
@@ -70,13 +116,13 @@ async function init() {
   await applyTheme();
   await render();
   const sync = document.getElementById("sync");
-  sync.textContent = "syncing…";
+  sync.textContent = "Syncing…";
   try {
     const result = await VocabStore.syncNow();
-    sync.textContent = result.ok ? "✓ synced" : "local only";
+    sync.textContent = result.ok ? "Synced" : "Saved on this device";
     if (result.ok) await render();
   } catch {
-    sync.textContent = "sync failed (offline?)";
+    sync.textContent = "Couldn't sync — saved on this device";
   }
 }
 

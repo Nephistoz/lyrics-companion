@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<!-- dev/panel-preview.html — the real panel.css / panel.js / wordPopup.js,
+     rendered over a mock YouTube Music page with stub data, so the panel can
+     be designed and checked without loading the extension.
+     Serve the repo root (python -m http.server) and open /dev/panel-preview.html.
+     The lyrics below are placeholder lines written for this page. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Panel preview</title>
+  <link rel="stylesheet" href="../extension/panel.css" />
+  <style>
+    /* panel.css points its fonts at chrome-extension://; outside the
+       extension they load from the repo instead */
+    @font-face {
+      font-family: "LC Bricolage";
+      src: url("../extension/fonts/BricolageGrotesque.woff2") format("woff2");
+      font-weight: 200 800;
+      font-stretch: 75% 100%;
+    }
+    @font-face {
+      font-family: "LC Literata";
+      src: url("../extension/fonts/LiterataItalic.woff2") format("woff2");
+      font-weight: 300 700;
+      font-style: italic;
+    }
+
+    /* a stand-in for YT Music: black page, covers, a player bar */
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #030303;
+      font-family: Roboto, Arial, sans-serif;
+      color: #fff;
+    }
+    .mock-top {
+      height: 64px;
+      border-bottom: 1px solid #1f1f1f;
+    }
+    .mock-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, 180px);
+      gap: 20px;
+      padding: 28px 32px;
+    }
+    .mock-grid div {
+      height: 180px;
+      border-radius: 6px;
+    }
+    .mock-bar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 72px;
+      background: #212121;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 16px;
+      font-size: 13px;
+      color: #aaa;
+    }
+    .mock-bar i {
+      width: 40px;
+      height: 40px;
+      border-radius: 4px;
+      background: linear-gradient(135deg, #ff7a59, #7b2ff7);
+    }
+    #demo {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 20000;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-width: 620px;
+    }
+    #demo button {
+      padding: 5px 9px;
+      border: 1px solid #333;
+      border-radius: 6px;
+      background: #111;
+      color: #ccc;
+      font: 12px system-ui;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="mock-top"></div>
+  <div class="mock-grid">
+    <div style="background: linear-gradient(135deg, #ff7a59, #7b2ff7)"></div>
+    <div style="background: linear-gradient(135deg, #1fd1a5, #155799)"></div>
+    <div style="background: linear-gradient(135deg, #f7b733, #fc4a1a)"></div>
+    <div style="background: linear-gradient(135deg, #e0e0e0, #6b6b6b)"></div>
+    <div style="background: linear-gradient(135deg, #4facfe, #00f2fe)"></div>
+    <div style="background: linear-gradient(135deg, #43e97b, #38f9d7)"></div>
+    <div style="background: linear-gradient(135deg, #fa709a, #fee140)"></div>
+    <div style="background: linear-gradient(135deg, #30cfd0, #330867)"></div>
+  </div>
+  <div class="mock-bar"><i></i>Streetlight Static · The Midnight Notebooks · 0:24 / 3:12</div>
+
+  <div id="demo">
+    <button data-do="playing">Playing</button>
+    <button data-do="loading">Loading</button>
+    <button data-do="none">No lyrics</button>
+    <button data-do="error">Error</button>
+    <button data-do="plain">Plain</button>
+    <button data-do="drift">Drift</button>
+    <button data-do="theme">Theme</button>
+    <button data-do="highlight">Highlight</button>
+    <button data-do="spanish">Spanish</button>
+    <button data-do="quiz">Quiz</button>
+    <button data-do="settings">Settings</button>
+    <button data-do="word">Tap word</button>
+    <button data-do="newword">Tap new word</button>
+  </div>
+
+  <script src="../extension/meaningProvider.js"></script>
+  <script>
+    // ---- stubs for the modules the panel talks to ----
+    const DICT = {
+      reminiscing: { phonetic: "/ˌrɛmɪˈnɪsɪŋ/", translation: "recordando", definitions: [{ partOfSpeech: "verb", definition: "Recalling the past in a fond or nostalgic way." }] },
+      highway: { phonetic: "/ˈhaɪweɪ/", translation: "autopista", definitions: [{ partOfSpeech: "noun", definition: "A main road, especially one connecting major towns." }] },
+      exits: { phonetic: "/ˈɛksɪts/", translation: "salidas", definitions: [{ partOfSpeech: "noun", definition: "Ways out of a place; on a highway, the ramps that leave it." }, { partOfSpeech: "verb", definition: "Goes out of or leaves a place." }] },
+    };
+    MeaningProvider.lookup = async (raw) => {
+      await new Promise((r) => setTimeout(r, 350));
+      const word = MeaningProvider.normalize(raw);
+      return { word, phonetic: "", definitions: [], translation: null, ...(DICT[word] || {}) };
+    };
+    const store = [
+      { id: "1", word: "reminiscing", songTitle: "Streetlight Static" },
+      { id: "2", word: "highway", songTitle: "Streetlight Static" },
+      { id: "3", word: "chorus", songTitle: "Paper Planes in June" },
+    ];
+    const listeners = [];
+    const VocabStore = {
+      getAll: async () => store.slice(),
+      add: async (e) => { store.unshift({ ...e, id: String(Date.now()) }); listeners.forEach((f) => f()); return e; },
+      onChange: (f) => listeners.push(f),
+    };
+  </script>
+  <script src="../extension/panel.js"></script>
+  <script src="../extension/wordPopup.js"></script>
+  <script>
+    const LYRICS = [
+      ["Streetlights hum a song I almost know", "Las farolas tararean una canción que casi conozco"],
+      ["Neon spilling over every window", "Neón derramándose sobre cada ventana"],
+      ["I keep the radio low so I can think", "Mantengo la radio baja para poder pensar"],
+      ["", ""],
+      ["Every highway sounds like your name", "Cada autopista suena como tu nombre"],
+      ["Every mile I swear I'll let it go", "Cada milla juro que lo dejaré ir"],
+      ["But the chorus keeps on pulling me back home", "Pero el coro me sigue jalando de vuelta a casa"],
+      ["Half awake and reminiscing in the rain", "Medio despierto, recordando bajo la lluvia"],
+      ["Counting exits like they owe me something", "Contando salidas como si me debieran algo"],
+      ["Wouldn't change a single wrong turn", "No cambiaría ni una sola vuelta equivocada"],
+      ["'Cause I'm still learning how the words go", "Porque sigo aprendiendo cómo va la letra"],
+      ["", ""],
+      ["Every highway sounds like your name", "Cada autopista suena como tu nombre"],
+      ["Every mile I swear I'll let it go", "Cada milla juro que lo dejaré ir"],
+      ["Turn it up, turn it up, let it go", "Súbele, súbele, déjalo ir"],
+    ];
+    const lines = LYRICS.map(([text], i) => ({ time: i * 4, text }));
+    const art = "data:image/svg+xml," + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7a59"/><stop offset="1" stop-color="#7b2ff7"/></linearGradient></defs><rect width="40" height="40" fill="url(#g)"/><circle cx="27" cy="13" r="5" fill="#ffd36e"/></svg>'
+    );
+
+    let settings = {
+      theme: "dark", accent: "#FFB454", opacity: 0.92, font: "grotesk", size: "m",
+      spacing: "cozy", align: "left", highlight: "glow", showTranslations: true,
+      blurUpcoming: false, panel: null,
+    };
+    const apply = (patch) => { settings = { ...settings, ...patch }; Panel.applySettings(settings); };
+    Panel.onSettingsChange(apply);
+    Panel.onWordClick(({ word, line, rect }) =>
+      WordPopup.show({ word, line, rect, songTitle: "Streetlight Static", artist: "The Midnight Notebooks" })
+    );
+    WordPopup.onOpenChange((open) => Panel.setScrollPaused(open));
+    Panel.onSyncNudge(() => {});
+    Panel.onRetry(() => demo.playing());
+    VocabStore.onChange(async () => Panel.setSavedWords(new Set((await VocabStore.getAll()).map((e) => e.word))));
+
+    const demo = {
+      playing() {
+        Panel.setTrack({ title: "Streetlight Static", artist: "The Midnight Notebooks", art });
+        Panel.showSynced(lines, "Streetlight Static — The Midnight Notebooks");
+        Panel.setTranslations(LYRICS.map(([, es]) => es));
+        Panel.setSyncState(0, "", 0);
+        Panel.setActiveLine(6);
+        Panel.setActiveProgress(0.45);
+      },
+      loading() { Panel.showLoading(); },
+      none() {
+        Panel.showNotice({ title: "No lyrics for this song yet", detail: "LRCLIB, the free lyrics library this panel reads from, doesn't have it. If this is a music video, the song version is more likely to be listed." });
+      },
+      error() {
+        Panel.showNotice({ title: "Lyrics didn't load", detail: "LRCLIB get failed (HTTP 503). Check your connection, then try again.", retry: true });
+      },
+      plain() { Panel.showPlain(LYRICS.map(([t]) => t).join("\n"), "Streetlight Static — The Midnight Notebooks"); },
+      drift() {
+        demo.playing();
+        Panel.setSyncState(0, "This version is 31s longer than the lyrics on file — usually a music video or extended mix with an intro.", 31);
+      },
+      theme() { apply({ theme: settings.theme === "dark" ? "light" : "dark" }); },
+      highlight() {
+        const order = ["glow", "spotlight", "classic"];
+        apply({ highlight: order[(order.indexOf(settings.highlight) + 1) % 3] });
+      },
+      spanish() { apply({ showTranslations: !settings.showTranslations }); },
+      quiz() { apply({ blurUpcoming: !settings.blurUpcoming }); },
+      settings() { document.getElementById("lc-gear").click(); },
+      tap(word) {
+        const span = [...document.querySelectorAll(".lc-word")].find((s) => s.textContent.toLowerCase() === word);
+        span && span.click();
+      },
+      word() { demo.tap("reminiscing"); },
+      newword() { demo.tap("exits"); },
+    };
+    document.getElementById("demo").addEventListener("click", (e) => {
+      const what = e.target.dataset.do;
+      if (what) demo[what]();
+    });
+
+    Panel.applySettings(settings);
+    VocabStore.getAll().then((all) => Panel.setSavedWords(new Set(all.map((e) => e.word))));
+    demo.playing();
+  </script>
+</body>
+</html>
