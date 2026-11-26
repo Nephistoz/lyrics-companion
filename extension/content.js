@@ -39,6 +39,36 @@ function readArtist() {
   return el.textContent.split("•")[0].trim() || null;
 }
 
+// The cleanest metadata YouTube Music has: what it hands the browser's media
+// controls (navigator.mediaSession). mediaSessionBridge.js copies it onto
+// <html> for us. Returns { title, artist, album } or null.
+function readMediaSession() {
+  const raw = document.documentElement.getAttribute("data-lc-media-session");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+// Combine both sources. The player bar decides WHEN the song changed (it's
+// what we've always watched); the media session adds the album and is
+// preferred for title/artist — but only if it already describes the same
+// song. Right after a skip it can lag behind the player bar for a moment,
+// and stale metadata would fetch the previous song's lyrics.
+function songInfo(domTitle, domArtist) {
+  const ms = readMediaSession();
+  const same = ms && ms.title && ms.title.trim().toLowerCase() === domTitle.toLowerCase();
+  if (!same) return { title: domTitle, artist: domArtist, album: null, source: "player bar" };
+  return {
+    title: ms.title.trim(),
+    artist: ms.artist.trim() || domArtist,
+    album: ms.album.trim() || null,
+    source: "media session",
+  };
+}
+
 function formatTime(seconds) {
   if (!Number.isFinite(seconds)) return "?:??";
   const m = Math.floor(seconds / 60);
@@ -55,23 +85,26 @@ let lineIndex = -1; // index of the last line we logged
 
 // async/await: getLyrics talks to the network, which takes time. "await"
 // pauses THIS function (nothing else) until the answer arrives.
-async function onSongChange(title, artist, duration) {
+async function onSongChange({ title, artist, album, source }, duration) {
   lines = null;
   lineIndex = -1;
   WordPopup.hide(); // a popup from the previous song makes no sense now
   const id = ++fetchId;
-  console.log(`${LOG} Song changed → ${title} — ${artist} (${formatTime(duration)}) — fetching lyrics…`);
+  const albumText = album ? ` [${album}]` : "";
+  console.log(`${LOG} Song changed → ${title} — ${artist}${albumText} (${formatTime(duration)}, from ${source}) — fetching lyrics…`);
   Panel.showMessage("Searching lyrics…", title);
   try {
-    const result = await LyricsProvider.getLyrics({ title, artist, duration });
+    const result = await LyricsProvider.getLyrics({ title, artist, album, duration });
     if (id !== fetchId) return; // user already skipped to another song
     if (!result) {
+      console.log(`${LOG} No lyrics found — added to the missed-songs list (toolbar icon → "Songs without lyrics").`);
       Panel.showMessage("No lyrics found for this song 🙁", title);
     } else if (result.instrumental) {
       Panel.showMessage("Instrumental track — nothing to sing 🎹", title);
     } else if (result.synced) {
       lines = result.synced;
-      console.log(`${LOG} Synced lyrics loaded: ${lines.length} lines (matched "${result.matched}").`);
+      const cacheNote = result.fromCache ? ", from cache" : "";
+      console.log(`${LOG} Synced lyrics loaded: ${lines.length} lines (matched "${result.matched}"${cacheNote}).`);
       Panel.showSynced(lines, result.matched);
     } else {
       Panel.showPlain(result.plain, result.matched);
@@ -104,9 +137,10 @@ function tick() {
   const songKey = `${title}|${artist}`;
   if (songKey !== lastSongKey && Number.isFinite(video.duration)) {
     lastSongKey = songKey;
-    lastTitle = title;
-    lastArtist = artist;
-    onSongChange(title, artist, video.duration);
+    const info = songInfo(title, artist);
+    lastTitle = info.title;
+    lastArtist = info.artist;
+    onSongChange(info, video.duration);
   }
 
   // Update the highlight even while paused — seeking works either way.
