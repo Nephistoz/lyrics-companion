@@ -194,6 +194,14 @@ Robi asked for a redesign that "prioritizes the user, modern interfaces and aest
 
 **Verifying UI without loading the extension:** serve the repo root (`python -m http.server 8766`) and open `/dev/panel-preview.html` (buttons drive every state) or `/dev/vocab-preview.html` (`?theme=light`). They run the real panel.css/panel.js/wordPopup.js and vocab.html with stub data; only the `chrome-extension://` font URLs fail there, by design. Gotcha: the browser pane throttles animations when backgrounded — freeze transitions before trusting a screenshot.
 
+## UI refresh PR 1 — speed (2026-11-26)
+
+Plan agreed with Robi: three PRs in order, speed → responsive → customization (presets incl. album tint, Side/Mini/Stage modes, karaoke wipe, quick chips). Mockups: project files `ui-refresh/`.
+- **Theme variables no longer live on `<body>`.** `Panel.applySettings` sets `--lc-*` on our own elements (panel, settings, pill, word card via `Panel.adoptTheme`). A custom property on `<body>` made Chrome re-style all of YouTube's page: `applySettings` went from 10.8ms to 1.1ms median on a 15k-element test page; the opacity slider paid that on every step.
+- **Progress hairline** grows with `transform: scaleX(--lc-progress)` (0..1) instead of `width`, so its ~10 Hz updates skip layout and paint.
+- **Backdrop blur only below 90% opacity** (`.lc-glass`): at the default 92% it was invisible but cost GPU work every frame the video moved.
+- Spotlight dropped its 0.8px blur on non-current lines (color dimming does the job); `#lc-panel` has `contain: layout paint style`.
+
 ## Known issues / notes
 
 - Artist parsing is naive: byline "Artist • Album • Year" split on the first "•". Multi-artist strings ("A & B") come through as-is; `lyricsProvider.js` retries with the main artist.

@@ -150,8 +150,6 @@
   display: flex;
   flex-direction: column;
   background: var(--lc-bg);
-  backdrop-filter: blur(20px) saturate(1.2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.2);
   border: 1px solid var(--lc-rule);
   border-radius: 18px;
   box-shadow: var(--lc-shadow);
@@ -159,6 +157,17 @@
   color: var(--lc-ink);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  /* nothing inside the panel can change the layout of YouTube's page */
+  contain: layout paint style;
+}
+
+/* Frosted glass only when you can actually see through the panel: blurring
+   the page behind it costs GPU work on every frame the video or page moves,
+   and at high opacity the blur is invisible anyway. */
+#lc-panel.lc-glass,
+#lc-toggle.lc-glass {
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
 }
 
 /* header: the song, plus two actions. Doubles as the drag handle. */
@@ -268,19 +277,23 @@
   transition: color 0.3s ease, transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1), text-shadow 0.3s ease;
 }
 
-/* progress hairline: fills under the current line as it is sung */
+/* progress hairline: fills under the current line as it is sung.
+   It grows with transform: scaleX (0..1 from --lc-progress) rather than
+   width, so the ~10 updates a second are composited — no layout, no repaint
+   of the lyrics around it. Centered text grows it from the middle. */
 .lc-main::after {
   content: "";
   display: block;
-  width: 0;
   height: 2px;
-  margin: 7px var(--lc-hairline-margin) 0;
+  margin: 7px 0 0;
   border-radius: 2px;
   background: linear-gradient(90deg, var(--lc-accent), transparent);
-  transition: width 0.12s linear;
+  transform: scaleX(0);
+  transform-origin: var(--lc-origin);
+  transition: transform 0.12s linear;
 }
 .lc-line.active .lc-main::after {
-  width: var(--lc-progress, 0%);
+  transform: scaleX(var(--lc-progress, 0));
 }
 
 /* empty LRC lines: an instrumental breath */
@@ -316,9 +329,6 @@
   transform: scale(1.035);
 }
 
-.hl-spotlight .lc-line:not(.active) {
-  filter: blur(0.8px);
-}
 .hl-spotlight .lc-line:not(.active) .lc-main {
   color: var(--lc-haze);
 }
@@ -520,8 +530,6 @@
   border-radius: 999px;
   border: 1px solid var(--lc-rule);
   background: var(--lc-bg);
-  backdrop-filter: blur(20px) saturate(1.2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.2);
   box-shadow: var(--lc-shadow);
   color: var(--lc-ink);
   font-family: var(--lc-ui);

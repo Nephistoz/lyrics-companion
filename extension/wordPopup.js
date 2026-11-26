@@ -25,6 +25,7 @@ const WordPopup = (() => {
     el.hidden = true;
     el.setAttribute("role", "dialog");
     el.setAttribute("aria-label", "Word details");
+    Panel.adoptTheme(el); // theme variables live on our elements, not <body>
     document.body.appendChild(el);
 
     // Any click that isn't inside the card or on another lyric word closes
