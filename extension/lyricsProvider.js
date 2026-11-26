@@ -9,9 +9,20 @@
 //      extension on music.youtube.com (the caller passes getVideoId). These
 //      are the licensed lyrics YT Music shows itself; from the browser they
 //      come back unsynced (plain text), so they're the backup, not the default.
+//
+// LRCLIB matching strategy (why there are several attempts):
+//   YouTube Music titles and artists are often "dirtier" than LRCLIB's
+//   catalog: "Hotel California (2013 Remaster)", "KAROL G & Nicki Minaj",
+//   channel names like "LuisFonsiVEVO" or "Adele - Topic". So we build a few
+//   cleaned-up variants of the title and artist and try them from most to
+//   least specific. Search results are only accepted if their title and
+//   artist actually resemble ours — better "not found" (and a chance for the
+//   YT Music fallback) than the wrong song's lyrics.
 
 const LyricsProvider = (() => {
   const API = "https://lrclib.net/api";
+
+  // ---------- title / artist cleanup ----------
 
   // Video titles carry junk like "[Official Lyric Visualizer]" or
   // "(Official Video)" that ruins search matching. Strip any (...) or [...]
@@ -20,18 +31,116 @@ const LyricsProvider = (() => {
   const JUNK =
     /[(\[][^)\]]*(official|lyrics?|video|audio|visuali[sz]er|\bmv\b|\bhd\b|4k)[^)\]]*[)\]]/gi;
 
+  // Version tags that LRCLIB usually stores WITHOUT: remasters, live takes,
+  // edits, soundtrack credits, featured artists. Same lyrics, different label.
+  const VERSION_WORDS =
+    "remaster(?:ed)?|live|radio edit|edit|single version|album version|" +
+    "mono|stereo|bonus track|deluxe|from|feat\\.?|ft\\.?|featuring|with|prod\\.?";
+  // Credits only count at the START of a bracket, so "(feat. X)" and
+  // '(From "Frozen")' go but "(Stay with Me)" stays.
+  const CREDIT_WORDS = "from|feat\\.?|ft\\.?|featuring|with|prod\\.?";
+  const TAG_WORDS = "remaster(?:ed)?|live|radio edit|edit|single version|album version|mono|stereo|bonus track|deluxe";
+  // In brackets: "(2013 Remaster)", "[Live at Wembley]", "(feat. X)", '(From "Frozen")'.
+  const VERSION_BRACKET = new RegExp(
+    `\\s*[(\\[](?:(?:${CREDIT_WORDS})\\s|[^)\\]]*\\b(?:${TAG_WORDS})\\b)[^)\\]]*[)\\]]`,
+    "gi"
+  );
+  // After a dash at the end: "- Remastered 2011", "- Radio Edit", "- Live".
+  const VERSION_DASH = new RegExp(`\\s+[-–—]\\s+[^-–—]*\\b(?:${VERSION_WORDS})\\b[^-–—]*$`, "i");
+  // Bare "feat. X" / "ft. X" with no brackets: "Despacito ft. Daddy Yankee".
+  const BARE_FEAT = /\s+(?:feat\.?|ft\.|featuring)\s+.*$/i;
+
   function cleanTitle(rawTitle, artist) {
     let t = rawTitle.replace(JUNK, "").trim();
     // Video titles often look like "Artist & Friend - Song Title".
     // If the part before " - " mentions the detected artist, drop it.
     const dash = t.indexOf(" - ");
     if (dash !== -1 && artist) {
-      const before = t.slice(0, dash).toLowerCase();
-      const firstArtist = artist.split(/[,&]/)[0].trim().toLowerCase();
+      const before = norm(t.slice(0, dash));
+      const firstArtist = norm(mainArtist(artist));
       if (firstArtist && before.includes(firstArtist)) t = t.slice(dash + 3);
     }
     return t.replace(/\s{2,}/g, " ").trim();
   }
+
+  // Remove version tags (see above). Never returns an empty string.
+  function stripVersion(title) {
+    const t = title
+      .replace(VERSION_BRACKET, "")
+      .replace(VERSION_DASH, "")
+      .replace(BARE_FEAT, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    return t || title;
+  }
+
+  // Channel names used as "artist" on video uploads:
+  // "Adele - Topic" → "Adele", "LuisFonsiVEVO" → "Luis Fonsi".
+  function cleanArtist(artist) {
+    if (!artist) return "";
+    let a = artist.replace(/\s*-\s*topic$/i, "").trim();
+    if (/vevo$/i.test(a)) {
+      a = a.replace(/\s*vevo$/i, "");
+      // VEVO channels glue words together in CamelCase: split them back.
+      a = a.replace(/([a-z])([A-Z])/g, "$1 $2");
+    }
+    return a.trim();
+  }
+
+  // "KAROL G & Nicki Minaj" → "KAROL G"; "HUNTR/X, EJAE" → "HUNTR/X".
+  // (Separators need spaces around them so "AC/DC" or "P!nk" survive.)
+  function mainArtist(artist) {
+    if (!artist) return "";
+    return artist.split(/\s*,\s*|\s+(?:&|x|feat\.?|ft\.?|featuring|with|and)\s+/i)[0].trim();
+  }
+
+  // ---------- similarity check for search results ----------
+
+  // Lowercase, drop accents ("Canción" = "cancion"), punctuation → spaces.
+  function norm(s) {
+    return (s || "")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+  }
+  const squash = (s) => norm(s).replace(/ /g, ""); // "Luis Fonsi" = "LuisFonsi"
+
+  // Titles match if, after removing version tags, one contains the other
+  // ("Despacito" vs "Despacito - Remix") or most of their words overlap.
+  function titleMatches(ours, theirs) {
+    const a = norm(stripVersion(ours));
+    const b = norm(stripVersion(theirs));
+    if (!a || !b) return false;
+    if (a === b || squash(a) === squash(b)) return true;
+    const shorter = a.length <= b.length ? a : b;
+    const longer = shorter === a ? b : a;
+    // Containment only counts when the shorter title isn't tiny
+    // (otherwise "Hello" would match "Hello, Goodbye and Everything").
+    if (shorter.length >= 4 && ` ${longer} `.includes(` ${shorter} `)) {
+      // ...and covers more than half of the longer one ("Love" ≠ "Love Story").
+      return shorter.split(" ").length / longer.split(" ").length > 0.5;
+    }
+    const wa = new Set(a.split(" "));
+    const wb = new Set(b.split(" "));
+    const common = [...wa].filter((w) => wb.has(w)).length;
+    return common / Math.max(wa.size, wb.size) >= 0.7;
+  }
+
+  // Artists match if any of our artist names appears inside theirs or vice
+  // versa (spaces ignored), e.g. "Bad Bunny" vs "Bad Bunny, Jhay Cortez".
+  function artistMatches(ourArtists, theirs) {
+    if (ourArtists.length === 0) return true; // manual search without artist
+    const t = squash(theirs);
+    if (!t) return false;
+    return ourArtists.some((a) => {
+      const s = squash(a);
+      return s.length >= 2 && (t.includes(s) || s.includes(t));
+    });
+  }
+
+  // ---------- LRCLIB calls ----------
 
   // LRC format is plain text, one line per lyric: "[mm:ss.xx] the words".
   // Parse into [{time: seconds, text}] sorted by time.
@@ -201,44 +310,104 @@ const LyricsProvider = (() => {
   const clearMissedSongs = () => storeSet(MISSES_KEY, []);
   const clearCache = () => storeSet(CACHE_KEY, {});
 
-  // From a list of search results, prefer: synced lyrics with a duration
-  // close to ours > any synced > plain lyrics close in duration > anything.
-  function pickBest(results, duration) {
+  // From search results, keep only those that really look like our song,
+  // then prefer: synced with close duration > any synced > plain with close
+  // duration > any plain. Returns null if nothing passes the check.
+  function pickBest(results, { titles, artists, duration }) {
     if (!results || results.length === 0) return null;
+    const ok = results.filter(
+      (r) =>
+        (r.syncedLyrics || r.plainLyrics || r.instrumental) &&
+        titles.some((t) => titleMatches(t, r.trackName || r.name || "")) &&
+        artistMatches(artists, r.artistName || "")
+    );
     const near = (r) =>
       !Number.isFinite(duration) || !r.duration || Math.abs(r.duration - duration) <= 10;
     return (
-      results.find((r) => r.syncedLyrics && near(r)) ||
-      results.find((r) => r.syncedLyrics) ||
-      results.find((r) => r.plainLyrics && near(r)) ||
-      results[0]
+      ok.find((r) => r.syncedLyrics && near(r)) ||
+      ok.find((r) => r.syncedLyrics) ||
+      ok.find((r) => r.plainLyrics && near(r)) ||
+      ok.find((r) => r.plainLyrics) ||
+      ok.find((r) => r.instrumental) ||
+      null
     );
   }
 
+  const unique = (arr) => [...new Set(arr.filter(Boolean))];
+
+  // Build the title/artist variants we will try, most specific first.
+  function buildVariants(title, artist) {
+    const artistClean = cleanArtist(artist);
+    const artists = unique([artistClean, mainArtist(artistClean)]);
+
+    const base = cleanTitle(title, artistClean);
+    const titles = unique([base, stripVersion(base)]);
+
+    // "Someone - Song" left in the title (artist wasn't recognized, e.g. a
+    // re-upload channel): also try "Someone" as artist and "Song" as title.
+    // (Version tags are stripped first so "Song - Radio Edit" isn't split.)
+    const plainBase = stripVersion(base);
+    const dash = plainBase.indexOf(" - ");
+    if (dash !== -1) {
+      const before = plainBase.slice(0, dash).trim();
+      const after = plainBase.slice(dash + 3).trim();
+      if (before && after) {
+        titles.push(after);
+        artists.push(cleanArtist(before), mainArtist(before));
+      }
+    }
+    return { titles: unique(titles), artists: unique(artists) };
+  }
+
   // ---------- Source 1: LRCLIB ----------
-  // Returns { synced, plain, matched } | { instrumental: true } | null.
+  // Returns { synced, plain, matched, source } | { instrumental: true } | null.
   async function fromLrclib({ title, artist, album, duration }) {
-    const track = cleanTitle(title, artist);
+    const { titles, artists } = buildVariants(title, artist);
+    const ctx = { titles, artists, duration };
+    const dur = Number.isFinite(duration) ? Math.round(duration) : null;
+    const strippedTitle = titles[titles.length > 1 ? 1 : 0];
+    const firstArtist = artists[0] || "";
+    const lastArtist = artists[artists.length - 1] || "";
 
-    // 1) Exact lookup — duration matching makes this very accurate.
-    //    With the album first (when we know it), then without: if YouTube's
-    //    album name differs from LRCLIB's, the album-less try still matches.
+    // 1) Exact lookups. /api/get needs artist + title (duration makes it
+    //    very accurate: LRCLIB only returns a track within ~2s of it).
+    //    Try at most a few pairs so a miss doesn't take forever.
     let hit = null;
-    if (artist) {
-      const params = { track_name: track, artist_name: artist };
-      if (Number.isFinite(duration)) params.duration = Math.round(duration);
-      if (album) hit = await apiCall("get", { ...params, album_name: album });
-      if (!hit) hit = await apiCall("get", params);
+    if (artists.length > 0) {
+      const pairs = unique(
+        [
+          [titles[0], firstArtist],
+          [strippedTitle, firstArtist],
+          [strippedTitle, artists[1] || firstArtist],
+          [titles[titles.length - 1], lastArtist],
+        ].map((p) => JSON.stringify(p))
+      ).map((p) => JSON.parse(p));
+      // When the media session gave us the album, try the first pair with
+      // album_name too (LRCLIB's most exact lookup); the album-less tries
+      // below still catch songs where YT's album name differs.
+      if (album) {
+        const [track_name, artist_name] = pairs[0];
+        const params = { track_name, artist_name, album_name: album };
+        if (dur !== null) params.duration = dur;
+        hit = await apiCall("get", params);
+      }
+      for (const [track_name, artist_name] of pairs) {
+        if (hit) break;
+        const params = { track_name, artist_name };
+        if (dur !== null) params.duration = dur;
+        hit = await apiCall("get", params);
+      }
     }
 
-    // 2) Fuzzy search fallback (handles messy video titles, remixes...).
+    // 2) Fuzzy search, with every result checked against our variants.
     if (!hit) {
-      const q = { track_name: track };
-      if (artist) q.artist_name = artist;
-      hit = pickBest(await apiCall("search", q), duration);
+      const q = { track_name: strippedTitle };
+      if (artists.length > 0) q.artist_name = artists[1] || firstArtist;
+      hit = pickBest(await apiCall("search", q), ctx);
     }
     if (!hit) {
-      hit = pickBest(await apiCall("search", { q: `${artist || ""} ${track}`.trim() }), duration);
+      const q = `${artists[1] || firstArtist} ${strippedTitle}`.trim();
+      hit = pickBest(await apiCall("search", { q }), ctx);
     }
 
     if (!hit) return null;
@@ -405,7 +574,17 @@ const LyricsProvider = (() => {
     getMissedSongs,
     clearMissedSongs,
     clearCache,
-    cleanTitle,
     parseLrc,
+    // Exposed for testing in the console / Node:
+    cleanTitle,
+    stripVersion,
+    cleanArtist,
+    mainArtist,
+    buildVariants,
+    titleMatches,
+    artistMatches,
   };
 })();
+
+// Let Node tests `require()` this file; harmless in the browser.
+if (typeof module !== "undefined") module.exports = LyricsProvider;
