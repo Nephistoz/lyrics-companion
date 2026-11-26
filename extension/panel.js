@@ -85,6 +85,7 @@ const Panel = (() => {
   function reset(header) {
     ensureBuilt();
     titleEl.textContent = header;
+    titleEl.title = header; // long names get cut with "…" — hover shows all
     lineEls = [];
     activeIdx = -1;
     linesEl.innerHTML = "";
@@ -100,7 +101,17 @@ const Panel = (() => {
     linesEl.appendChild(p);
   }
 
-  function showSynced(lines, header) {
+  // Small credit line under the lyrics: where they came from. Handy when
+  // lyrics look wrong, and fair to the people who license them.
+  function appendSource(source) {
+    if (!source) return;
+    const p = document.createElement("p");
+    p.className = "lc-source";
+    p.textContent = `Lyrics via ${source}`;
+    linesEl.appendChild(p);
+  }
+
+  function showSynced(lines, header, source) {
     reset(header);
     for (const line of lines) {
       const p = document.createElement("p");
@@ -110,9 +121,13 @@ const Panel = (() => {
       linesEl.appendChild(p);
       lineEls.push(p);
     }
+    appendSource(source);
   }
 
-  function showPlain(text, header) {
+  // Unsynced lyrics (LRCLIB plain text, or YouTube Music's Lyrics tab):
+  // no highlight or auto-scroll, but every word is still tappable — same
+  // renderLine() as synced lines, so word capture works identically.
+  function showPlain(text, header, source) {
     reset(`${header} (not synced)`);
     for (const row of text.split("\n")) {
       const p = document.createElement("p");
