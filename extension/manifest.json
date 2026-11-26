@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Lyrics & Vocab Companion (dev)",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "M5: tap lyric words on YouTube Music to translate, save, and sync them to your phone.",
   "permissions": ["storage"],
   "action": {

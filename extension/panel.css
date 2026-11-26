@@ -188,3 +188,11 @@
 #lc-toggle:hover {
   border-color: rgba(255, 255, 255, 0.35);
 }
+
+/* "Lyrics via …" credit under the lyrics */
+#lc-panel .lc-source {
+  margin-top: 24px;
+  font-size: 11px;
+  color: #777;
+  text-align: center;
+}
