@@ -69,6 +69,15 @@ function songInfo(domTitle, domArtist) {
   };
 }
 
+// The playing video's id, for the YouTube Music lyrics fallback.
+// The player's (hidden) title link keeps pointing at the current video even
+// when you browse away from the watch page; the URL's ?v= is the backup.
+function readVideoId() {
+  const link = document.querySelector(".ytp-title-link");
+  const fromLink = link && link.href ? new URL(link.href).searchParams.get("v") : null;
+  return fromLink || new URLSearchParams(location.search).get("v");
+}
+
 function formatTime(seconds) {
   if (!Number.isFinite(seconds)) return "?:??";
   const m = Math.floor(seconds / 60);
@@ -94,7 +103,8 @@ async function onSongChange({ title, artist, album, source }, duration) {
   console.log(`${LOG} Song changed → ${title} — ${artist}${albumText} (${formatTime(duration)}, from ${source}) — fetching lyrics…`);
   Panel.showMessage("Searching lyrics…", title);
   try {
-    const result = await LyricsProvider.getLyrics({ title, artist, album, duration });
+    const result = await LyricsProvider.getLyrics({ title, artist, album, duration, getVideoId: readVideoId });
+    const cacheNote = result && result.fromCache ? ", from cache" : "";
     if (id !== fetchId) return; // user already skipped to another song
     if (!result) {
       console.log(`${LOG} No lyrics found — added to the missed-songs list (toolbar icon → "Songs without lyrics").`);
@@ -103,11 +113,11 @@ async function onSongChange({ title, artist, album, source }, duration) {
       Panel.showMessage("Instrumental track — nothing to sing 🎹", title);
     } else if (result.synced) {
       lines = result.synced;
-      const cacheNote = result.fromCache ? ", from cache" : "";
-      console.log(`${LOG} Synced lyrics loaded: ${lines.length} lines (matched "${result.matched}"${cacheNote}).`);
-      Panel.showSynced(lines, result.matched);
+      console.log(`${LOG} Synced lyrics loaded from ${result.source}: ${lines.length} lines (matched "${result.matched}"${cacheNote}).`);
+      Panel.showSynced(lines, result.matched, result.source);
     } else {
-      Panel.showPlain(result.plain, result.matched);
+      console.log(`${LOG} Unsynced lyrics loaded from ${result.source} (matched "${result.matched}"${cacheNote}).`);
+      Panel.showPlain(result.plain, result.matched, result.source);
     }
   } catch (err) {
     if (id === fetchId) {

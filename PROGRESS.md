@@ -59,11 +59,21 @@ lyrics-companion/     (git repo, main branch — public on GitHub for Pages)
 - Language pair (2026-07-14): learning **English**, native **Spanish**. Definitions = Free Dictionary API (per spec). Translation = **Lingva** (Robi's choice) with an instance list — dialectapp.org was the only healthy mirror on 2026-07-14 (lingva.ml & friends had broken upstreams) — and **MyMemory as automatic last resort**. All lookups have 4s timeouts; definition and translation fail independently.
 - Word capture details: words tokenized with apostrophe-friendly regex ("don't", "gettin'" = one word); slang "…in'" retries the dictionary with "…ing"; Google's echo-back of unknown words is discarded when the dictionary also found nothing (protects real cognates). Vocabulary list lives in the toolbar-icon popup (`action.default_popup`), newest first, with delete buttons (small extra beyond spec — needed to clean up mis-taps while testing).
 
+## Lyrics fallback: YouTube Music's Lyrics tab (2026-11-26)
+
+- When LRCLIB has no synced lyrics (miss, error, or plain-only), `lyricsProvider.js` asks YT Music itself for the lyrics of the exact playing video: `POST /youtubei/v1/next {videoId}` → Lyrics-tab `browseId` (starts with `MPLY`) → `POST /youtubei/v1/browse` → `musicDescriptionShelfRenderer` text. Same-origin from the content script, no key, no new permissions. Verified on the live site.
+- Order: LRCLIB synced → YT Music plain → LRCLIB plain → "No lyrics found". YT plain beats LRCLIB plain because it's tied to the exact video (no fuzzy match).
+- From the browser these lyrics are **unsynced** (the timed variant only comes back to the Android app). Shown with `showPlain()`, so words stay tappable; no highlight/auto-scroll.
+- Video id comes from the player's hidden `.ytp-title-link` (persists while browsing away from /watch), then `?v=`. Read lazily, only when the fallback runs, to avoid a stale id right after a skip.
+- Panel now shows a "Lyrics via …" credit line (LRCLIB or "YouTube Music (Musixmatch)").
+- Companion app is unaffected (it passes no `getVideoId`, and YT's API isn't reachable from github.io anyway).
+- Undocumented API: if the fallback stops finding anything, check the `MPLY` browseId and `musicDescriptionShelfRenderer` names first. Licensing note for M7: these are licensed lyrics, fine for personal use only.
+
 ## Lyrics retrieval hardening (2026-11-26, branch `claude/project-thread-qpwcbz`)
 
-- **Timeout + retry:** every LRCLIB call gives up after 7s and retries once after 1s on timeout, network error, 429 or 5xx (404 = normal "not found", never retried). Worst case on a dead LRCLIB ≈ 15s, then a clear error in the panel.
-- **Cache:** `lyricsCache` in `chrome.storage.local` (localStorage in the companion), keyed by lowercase title|artist (no duration — it can be stale right after a skip). Hits kept until 300 songs, oldest dropped. Misses cached 24h. Network errors never cached.
-- **Missed-songs log:** `lyricsMisses` (max 200): raw title/artist/album/duration, the cleaned search title, reason (`not_found`/`error`), try count. Visible in the toolbar popup under "Songs without lyrics" with Copy/Clear. A song that later resolves removes itself.
+- **Timeout + retry:** every LRCLIB call gives up after 7s and retries once after 1s on timeout, network error, 429 or 5xx (404 = normal "not found", never retried). Worst case on a dead LRCLIB ≈ 15s per call before the YT Music fallback runs.
+- **Cache** wraps the whole source chain (LRCLIB + YT Music fallback), so YT Music results are cached too. `lyricsCache` in `chrome.storage.local` (localStorage in the companion), keyed by lowercase title|artist (no duration — it can be stale right after a skip). Hits kept until 300 songs, oldest dropped. Misses cached 24h. Network errors never cached.
+- **Missed-songs log:** `lyricsMisses` (max 200): raw title/artist/album/duration, the cleaned search title, reason (`not_found` = no source had it / `error` = LRCLIB unreachable and YT had nothing), try count. Visible in the toolbar popup under "Songs without lyrics" with Copy/Clear. A song that later resolves removes itself.
 - **Media session:** `mediaSessionBridge.js` runs in the page's MAIN world (needs Chrome 111+) and copies `navigator.mediaSession.metadata` onto `<html data-lc-media-session>`. content.js uses it for title/artist/album only when its title matches the player bar (avoids stale metadata after a skip). `/api/get` is tried with `album_name` first, then without.
 - Not verified live yet: the cloud environment can't reach lrclib.net. Logic tested offline with a mocked fetch/storage.
 

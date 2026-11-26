@@ -3,7 +3,12 @@
 // Swappable by design: if we ever move to a licensed provider (Musixmatch...),
 // only this file changes. Everything else just calls LyricsProvider.getLyrics().
 //
-// Provider: LRCLIB (https://lrclib.net) — free, open, no API key.
+// Sources, tried in order:
+//   1. LRCLIB (https://lrclib.net) — free, open, no API key. Often synced.
+//   2. YouTube Music's own Lyrics tab — only when running inside the
+//      extension on music.youtube.com (the caller passes getVideoId). These
+//      are the licensed lyrics YT Music shows itself; from the browser they
+//      come back unsynced (plain text), so they're the backup, not the default.
 
 const LyricsProvider = (() => {
   const API = "https://lrclib.net/api";
@@ -210,9 +215,9 @@ const LyricsProvider = (() => {
     );
   }
 
-  // Asks LRCLIB, no cache involved.
+  // ---------- Source 1: LRCLIB ----------
   // Returns { synced, plain, matched } | { instrumental: true } | null.
-  async function fetchFromLrclib({ title, artist, album, duration }) {
+  async function fromLrclib({ title, artist, album, duration }) {
     const track = cleanTitle(title, artist);
 
     // 1) Exact lookup — duration matching makes this very accurate.
@@ -244,13 +249,130 @@ const LyricsProvider = (() => {
       synced: hit.syncedLyrics ? parseLrc(hit.syncedLyrics) : null,
       plain: hit.plainLyrics || null,
       matched: `${hit.trackName} — ${hit.artistName}`,
+      source: "LRCLIB",
     };
   }
 
-  // The one public entry point: cache first, then LRCLIB.
-  // song = { title, artist, album?, duration } (album and duration optional).
-  // Returns { synced, plain, matched, fromCache? } | { instrumental: true } | null.
-  // Throws only when LRCLIB is unreachable (after the retry).
+  // ---------- Source 2: YouTube Music's Lyrics tab ----------
+  // YT Music has no public API, but its own web app talks to an internal
+  // one ("InnerTube", under /youtubei/v1/). Our content script runs on
+  // music.youtube.com, so these are ordinary same-origin requests — no key,
+  // no extra permissions. Two steps, the same ones the Lyrics tab makes:
+  //   POST /next   {videoId}  → the watch page; its Lyrics tab carries a
+  //                             browseId starting with "MPLY" (missing when
+  //                             YT has no lyrics for the song)
+  //   POST /browse {browseId} → the lyrics text + "Source: Musixmatch"-style
+  //                             credit line
+  // Verified on the live site 2026-11-26. Like the player-bar selectors,
+  // this is undocumented and may change: it's the first suspect if the
+  // fallback stops finding anything.
+  const YT_FALLBACK_CLIENT_VERSION = "1.20241106.01.00";
+  const YT_TIMEOUT_MS = 6000;
+
+  // The page embeds its current client version in an inline script. Our
+  // isolated world can't read the page's JS variables, but it can read the
+  // script text. If that ever fails, an older version still works.
+  let ytClientVersion = null;
+  function getYtClientVersion() {
+    if (ytClientVersion) return ytClientVersion;
+    for (const s of document.scripts) {
+      const m = /"INNERTUBE_CLIENT_VERSION":"([^"]+)"/.exec(s.textContent);
+      if (m) return (ytClientVersion = m[1]);
+    }
+    return YT_FALLBACK_CLIENT_VERSION;
+  }
+
+  async function ytCall(endpoint, body) {
+    const res = await fetch(`/youtubei/v1/${endpoint}?prettyPrint=false`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        context: { client: { clientName: "WEB_REMIX", clientVersion: getYtClientVersion(), hl: "en" } },
+        ...body,
+      }),
+      signal: AbortSignal.timeout(YT_TIMEOUT_MS),
+    });
+    if (!res.ok) throw new Error(`YouTube Music ${endpoint} failed (HTTP ${res.status})`);
+    return res.json();
+  }
+
+  // Walk any JSON tree and return the first object that has `key`.
+  // YT's response nesting changes often; searching by name is sturdier
+  // than hard-coding a 12-step path.
+  function findKey(node, key) {
+    if (!node || typeof node !== "object") return null;
+    if (key in node) return node[key];
+    for (const child of Object.values(node)) {
+      const found = findKey(child, key);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  const runsText = (t) => (t && t.runs ? t.runs.map((r) => r.text).join("") : (t && t.simpleText) || "");
+
+  // Returns { synced: null, plain, matched, source } | null.
+  async function fromYouTubeMusic({ videoId, title, artist }) {
+    if (!videoId || location.hostname !== "music.youtube.com") return null;
+
+    const watch = await ytCall("next", { videoId });
+    const browseId = (JSON.stringify(watch).match(/"browseId":"(MPLY[^"]+)"/) || [])[1];
+    if (!browseId) return null; // YT Music has no lyrics for this one either
+
+    const page = await ytCall("browse", { browseId });
+    const shelf = findKey(page, "musicDescriptionShelfRenderer");
+    const plain = shelf ? runsText(shelf.description).trim() : "";
+    if (!plain) return null;
+
+    // Footer reads e.g. "Source: Musixmatch" — keep just the licensor's name.
+    const credit = shelf ? runsText(shelf.footer).replace(/^\s*source:\s*/i, "").trim() : "";
+    return {
+      synced: null,
+      plain,
+      matched: `${title}${artist ? ` — ${artist}` : ""}`,
+      source: credit ? `YouTube Music (${credit})` : "YouTube Music",
+    };
+  }
+
+  // ---------- All sources, in order (no cache) ----------
+  // Returns { synced, plain, matched, source } | { instrumental: true } | null.
+  //
+  // getVideoId (optional) is a function, not a value: it's called only if
+  // LRCLIB comes up short, a few seconds later, so it reads the video that's
+  // actually playing by then (right after a skip the old id can linger).
+  async function resolveLyrics({ title, artist, album, duration, getVideoId }) {
+    let lrclib = null;
+    let lrclibError = null;
+    try {
+      lrclib = await fromLrclib({ title, artist, album, duration });
+    } catch (err) {
+      lrclibError = err; // LRCLIB down? YT Music may still have it.
+    }
+
+    // Synced LRCLIB lyrics are the best we can get — done.
+    if (lrclib && (lrclib.instrumental || lrclib.synced)) return lrclib;
+
+    // LRCLIB missed, failed, or only had plain text: try YT Music.
+    // YT's plain text is matched to the exact video (no fuzzy guessing), so
+    // when LRCLIB only offers plain lyrics too, YT's are the safer pick.
+    if (typeof getVideoId === "function") {
+      try {
+        const yt = await fromYouTubeMusic({ videoId: getVideoId(), title, artist });
+        if (yt) return yt;
+      } catch (err) {
+        console.log(`🎵 [LyricsCompanion] YouTube Music lyrics fallback failed: ${err.message}`);
+      }
+    }
+
+    if (lrclib) return lrclib;
+    if (lrclibError) throw lrclibError; // nothing anywhere, and LRCLIB errored
+    return null;
+  }
+
+  // ---------- The one public entry point: cache first, then all sources ----------
+  // song = { title, artist, album?, duration?, getVideoId? }.
+  // Returns { synced, plain, matched, source, fromCache? } | { instrumental: true } | null.
+  // Throws only when every source came up empty AND LRCLIB was unreachable.
   async function getLyrics(song) {
     const key = songKey(song.title, song.artist);
 
@@ -261,7 +383,7 @@ const LyricsProvider = (() => {
 
     let result;
     try {
-      result = await fetchFromLrclib(song);
+      result = await resolveLyrics(song);
     } catch (err) {
       // Network trouble isn't cached (next play tries again), but it is
       // logged so a song that keeps erroring shows up in the list.
@@ -269,7 +391,10 @@ const LyricsProvider = (() => {
       throw err;
     }
 
-    await cachePut(key, result); // a miss is cached too, for MISS_TTL_MS
+    // Found lyrics (from any source) and misses are both cached; a miss
+    // only for MISS_TTL_MS. A miss here means LRCLIB AND YouTube Music
+    // (when available) both had nothing.
+    await cachePut(key, result);
     if (result) await clearMiss(song);
     else await logMiss(song, "not_found");
     return result;
