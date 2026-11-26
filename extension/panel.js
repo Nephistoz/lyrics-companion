@@ -368,9 +368,10 @@ const Panel = (() => {
     return [root, settingsEl, toggleBtn, document.getElementById("lc-popup")].filter(Boolean);
   }
 
-  // Backdrop blur only below 90% opacity (see .lc-glass in panel.css).
+  // Backdrop blur whenever the panel is see-through at all (see .lc-glass
+  // in panel.css); a fully opaque panel has nothing to blur.
   function setGlass(opacity) {
-    const glass = opacity < 0.9;
+    const glass = opacity < 1;
     root.classList.toggle("lc-glass", glass);
     toggleBtn.classList.toggle("lc-glass", glass);
   }

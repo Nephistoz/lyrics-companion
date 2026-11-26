@@ -161,9 +161,10 @@
   contain: layout paint style;
 }
 
-/* Frosted glass only when you can actually see through the panel: blurring
-   the page behind it costs GPU work on every frame the video or page moves,
-   and at high opacity the blur is invisible anyway. */
+/* Frosted glass only when you can see through the panel at all: at 100%
+   opacity there is nothing to blur, so skip its per-frame GPU cost. Below
+   that, even at 92% the blur matters — without it, sharp page edges show
+   faintly through the panel. */
 #lc-panel.lc-glass,
 #lc-toggle.lc-glass {
   backdrop-filter: blur(20px) saturate(1.2);

@@ -199,7 +199,7 @@ Robi asked for a redesign that "prioritizes the user, modern interfaces and aest
 Plan agreed with Robi: three PRs in order, speed → responsive → customization (presets incl. album tint, Side/Mini/Stage modes, karaoke wipe, quick chips). Mockups: project files `ui-refresh/`.
 - **Theme variables no longer live on `<body>`.** `Panel.applySettings` sets `--lc-*` on our own elements (panel, settings, pill, word card via `Panel.adoptTheme`). A custom property on `<body>` made Chrome re-style all of YouTube's page: `applySettings` went from 10.8ms to 1.1ms median on a 15k-element test page; the opacity slider paid that on every step.
 - **Progress hairline** grows with `transform: scaleX(--lc-progress)` (0..1) instead of `width`, so its ~10 Hz updates skip layout and paint.
-- **Backdrop blur only below 90% opacity** (`.lc-glass`): at the default 92% it was invisible but cost GPU work every frame the video moved.
+- **Backdrop blur only when the panel is see-through** (`.lc-glass`, opacity < 100%). First tried a 90% cutoff, but at the default 92% sharp page edges then showed through; Robi chose to keep the glass look. Set opacity to 100% to skip the blur's per-frame GPU cost.
 - Spotlight dropped its 0.8px blur on non-current lines (color dimming does the job); `#lc-panel` has `contain: layout paint style`.
 
 ## Known issues / notes
