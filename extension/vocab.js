@@ -111,10 +111,46 @@ async function applyTheme() {
   root.setProperty("--mark", s.accent + (s.theme === "light" ? "73" : "5C"));
 }
 
+// Songs that didn't resolve to lyrics (logged by LyricsProvider). Hidden
+// when the list is empty. "Copy list" puts it on the clipboard as text,
+// handy for pasting into a bug report or a chat.
+async function renderMisses() {
+  const box = document.getElementById("misses");
+  const list = document.getElementById("miss-list");
+  const misses = await LyricsProvider.getMissedSongs();
+  box.hidden = misses.length === 0;
+  document.getElementById("miss-count").textContent = `(${misses.length})`;
+  list.innerHTML = "";
+  for (const m of misses) {
+    const row = el("div", "miss");
+    row.appendChild(el("div", "", `${m.title} — ${m.artist || "?"}`));
+    const why = m.reason === "error" ? `error: ${m.detail}` : "not found";
+    const album = m.album ? ` · album: ${m.album}` : "";
+    const tries = m.count > 1 ? ` · ${m.count} tries` : "";
+    row.appendChild(el("div", "miss-sub", `${why}${album}${tries} · searched as "${m.searchedAs}"`));
+    list.appendChild(row);
+  }
+}
+
+document.getElementById("miss-copy").addEventListener("click", async (e) => {
+  const misses = await LyricsProvider.getMissedSongs();
+  const text = misses
+    .map((m) => [m.title, m.artist, m.album, m.duration, m.reason, m.count].map((v) => v ?? "").join("\t"))
+    .join("\n");
+  await navigator.clipboard.writeText("title\tartist\talbum\tduration\treason\ttries\n" + text);
+  e.target.textContent = "Copied ✓";
+});
+
+document.getElementById("miss-clear").addEventListener("click", async () => {
+  await LyricsProvider.clearMissedSongs();
+  renderMisses();
+});
+
 // Show local data instantly, then sync with the cloud and re-render.
 async function init() {
   await applyTheme();
   await render();
+  renderMisses();
   const sync = document.getElementById("sync");
   sync.textContent = "Syncing…";
   try {

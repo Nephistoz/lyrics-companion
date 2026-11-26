@@ -5,6 +5,7 @@ Plain Node, no dependencies, no build step. Run them from the repo root:
 ```
 node tests/lyrics-matching.test.js
 node tests/track-change.test.js
+node tests/lyricsProvider.test.js
 ```
 
 - **lyrics-matching** — hits the real LRCLIB API: honours `[offset:]` tags, picks the
@@ -15,4 +16,8 @@ node tests/track-change.test.js
   song's lyrics could arrive while the previous song was still playing, and the
   highlight would land in the middle of the song.
 
-Run both before touching sync code.
+- **lyricsProvider** — offline: title/artist cleanup and the similarity checks that
+  reject wrong LRCLIB search results.
+
+Run all three before touching sync or lyrics code. (lyrics-matching prints a storage
+warning in Node: the lyrics cache has no `chrome.storage` there. Harmless.)

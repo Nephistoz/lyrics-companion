@@ -206,6 +206,49 @@
       line-height: 1.55;
       color: var(--haze);
     }
+
+    /* "Songs without lyrics": the missed-songs log from lyricsProvider.js */
+    #misses {
+      margin: 6px 18px 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--rule);
+    }
+    #misses summary {
+      cursor: pointer;
+      font-size: 12.5px;
+      color: var(--haze);
+    }
+    #misses .miss {
+      padding: 7px 0;
+      font-size: 12.5px;
+      border-bottom: 1px solid var(--rule);
+    }
+    #misses .miss-sub {
+      margin-top: 2px;
+      font-size: 11.5px;
+      color: var(--haze);
+    }
+    #misses .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    #misses button {
+      all: unset;
+      cursor: pointer;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: var(--ink);
+      border: 1px solid var(--rule);
+      border-radius: 7px;
+    }
+    #misses button:hover {
+      background: var(--rule);
+    }
+    #misses button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
   </style>
 </head>
 <body>
@@ -214,8 +257,19 @@
     <span id="count"></span>
     <span id="sync" role="status"></span>
   </header>
-  <main id="list"></main>
+  <main>
+    <div id="list"></div>
+    <details id="misses" hidden>
+      <summary>Songs without lyrics <span id="miss-count"></span></summary>
+      <div id="miss-list"></div>
+      <div class="actions">
+        <button type="button" id="miss-copy">Copy list</button>
+        <button type="button" id="miss-clear">Clear list</button>
+      </div>
+    </details>
+  </main>
   <script src="config.js"></script>
+  <script src="lyricsProvider.js"></script>
   <script src="syncProvider.js"></script>
   <script src="settingsStore.js"></script>
   <script src="meaningProvider.js"></script>

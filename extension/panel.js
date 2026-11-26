@@ -614,8 +614,8 @@ const Panel = (() => {
     }
   }
 
-  function setMatched(matched) {
-    titleEl.title = matched ? `Lyrics matched on LRCLIB: ${matched}` : "";
+  function setMatched(matched, source) {
+    titleEl.title = matched ? `Lyrics matched${source ? ` on ${source}` : ""}: ${matched}` : "";
   }
 
   function showLoading() {
@@ -646,27 +646,38 @@ const Panel = (() => {
     linesEl.appendChild(box);
   }
 
-  function showSynced(lines, matched) {
+  // Small credit line under the lyrics: where they came from. Handy when
+  // lyrics look wrong, and fair to the people who license them.
+  function appendSource(source) {
+    if (!source) return;
+    linesEl.appendChild(node("p", "lc-source", `Lyrics via ${source}`));
+  }
+
+  function showSynced(lines, matched, source) {
     reset();
     showFoot(true);
-    setMatched(matched);
+    setMatched(matched, source);
     for (const line of lines) {
       const el = buildLine(line.text, false);
       linesEl.appendChild(el);
       lineEls.push(el);
     }
+    appendSource(source);
   }
 
-  function showPlain(text, matched) {
+  // Unsynced lyrics (LRCLIB plain text, or YouTube Music's Lyrics tab):
+  // no highlight or auto-scroll, but every word is still tappable.
+  function showPlain(text, matched, source) {
     reset();
     showFoot(false);
-    setMatched(matched);
+    setMatched(matched, source);
     linesEl.appendChild(
       node("p", "lc-plain-note", "These lyrics aren't timed, so they won't follow the song.")
     );
     for (const row of text.split("\n")) {
       linesEl.appendChild(buildLine(row, true));
     }
+    appendSource(source);
   }
 
   // Spanish sub-lines, same order and length as the synced lines array.

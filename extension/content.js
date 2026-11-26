@@ -59,6 +59,45 @@ function trackInfo(title, artist) {
   return { title: LyricsProvider.cleanTitle(title, artist) || title, artist, art: readArt() };
 }
 
+// The cleanest metadata YouTube Music has: what it hands the browser's media
+// controls (navigator.mediaSession). mediaSessionBridge.js copies it onto
+// <html> for us. Returns { title, artist, album } or null.
+function readMediaSession() {
+  const raw = document.documentElement?.getAttribute("data-lc-media-session");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+// Combine both sources. The player bar decides WHEN the song changed (it's
+// what we've always watched); the media session adds the album and is
+// preferred for title/artist — but only if it already describes the same
+// song. Right after a skip it can lag behind the player bar for a moment,
+// and stale metadata would fetch the previous song's lyrics.
+function songInfo(domTitle, domArtist) {
+  const ms = readMediaSession();
+  const same = ms && ms.title && ms.title.trim().toLowerCase() === domTitle.toLowerCase();
+  if (!same) return { title: domTitle, artist: domArtist, album: null, source: "player bar" };
+  return {
+    title: ms.title.trim(),
+    artist: (ms.artist || "").trim() || domArtist,
+    album: (ms.album || "").trim() || null,
+    source: "media session",
+  };
+}
+
+// The playing video's id, for the YouTube Music lyrics fallback.
+// The player's (hidden) title link keeps pointing at the current video even
+// when you browse away from the watch page; the URL's ?v= is the backup.
+function readVideoId() {
+  const link = document.querySelector(".ytp-title-link");
+  const fromLink = link && link.href ? new URL(link.href).searchParams.get("v") : null;
+  return fromLink || new URLSearchParams(location.search).get("v");
+}
+
 function formatTime(seconds) {
   if (!Number.isFinite(seconds)) return "?:??";
   const m = Math.floor(seconds / 60);
@@ -69,6 +108,7 @@ function formatTime(seconds) {
 let lastSongKey = null;
 let lastTitle = null; // current song, kept for saving words with context
 let lastArtist = null;
+let lastMeta = {}; // { album, source } for the current song, for refetches
 let fetchId = 0; // increments per song; stale fetch responses get ignored
 let lines = null; // current song's synced lyrics: [{time, text}]
 let lineIndex = -1; // index of the line currently lit
@@ -95,7 +135,11 @@ let clockTrusted = true; // does the <video> we read agree with that bar?
 
 // async/await: getLyrics talks to the network, which takes time. "await"
 // pauses THIS function (nothing else) until the answer arrives.
-async function onSongChange(title, artist, duration, expectStart = true) {
+// meta = { album, source } from songInfo(): the media session's album (when
+// it has one) makes the LRCLIB lookup more exact.
+async function onSongChange(title, artist, duration, expectStart = true, meta = {}) {
+  const album = meta.album || null;
+  const source = meta.source || "player bar";
   lines = null;
   lineIndex = -1;
   fetchedDuration = duration;
@@ -107,7 +151,8 @@ async function onSongChange(title, artist, duration, expectStart = true) {
   holdSince = Date.now();
   WordPopup.hide(); // a popup from the previous song makes no sense now
   const id = ++fetchId;
-  console.log(`${LOG} Song changed → ${title} — ${artist} (${formatTime(duration)}) — fetching lyrics…`);
+  const albumText = album ? ` [${album}]` : "";
+  console.log(`${LOG} Song changed → ${title} — ${artist}${albumText} (${formatTime(duration)}, from ${source}) — fetching lyrics…`);
   Panel.setTrack(trackInfo(title, artist));
   Panel.showLoading();
 
@@ -116,19 +161,21 @@ async function onSongChange(title, artist, duration, expectStart = true) {
   if (id !== fetchId) return;
 
   try {
-    const result = await LyricsProvider.getLyrics({ title, artist, duration });
+    const result = await LyricsProvider.getLyrics({ title, artist, album, duration, getVideoId: readVideoId });
+    const cacheNote = result && result.fromCache ? ", from cache" : "";
     if (id !== fetchId) return; // user already skipped to another song
     Panel.setTrack(trackInfo(title, artist)); // the cover often lands after the title
     if (!result) {
+      console.log(`${LOG} No lyrics found — added to the missed-songs list (toolbar icon → "Songs without lyrics").`);
       Panel.showNotice({
         title: "No lyrics for this song yet",
-        detail: "LRCLIB, the free lyrics library this panel reads from, doesn't have it. If this is a music video, the song version is more likely to be listed.",
+        detail: "Neither LRCLIB nor YouTube Music's own Lyrics tab has it. If this is a music video, the song version is more likely to be listed. It's been added to \"Songs without lyrics\" in your words list.",
       });
     } else if (result.instrumental) {
       Panel.showNotice({ title: "Instrumental", detail: "This track has no lyrics to follow." });
     } else if (result.synced) {
       lines = result.synced;
-      console.log(`${LOG} Synced lyrics loaded: ${lines.length} lines (matched "${result.matched}").`);
+      console.log(`${LOG} Synced lyrics loaded from ${result.source}: ${lines.length} lines (matched "${result.matched}"${cacheNote}).`);
       // LRCLIB carries several versions of many songs. When even the closest
       // one isn't the length of what's playing, timings will drift — say so
       // rather than leaving Robi to wonder why the lyrics wander off.
@@ -145,11 +192,12 @@ async function onSongChange(title, artist, duration, expectStart = true) {
         if (diff > 0) fitSuggestion = Math.round(diff);
         console.log(`${LOG} ${driftHint}`);
       }
-      Panel.showSynced(lines, result.matched);
+      Panel.showSynced(lines, result.matched, result.source);
       Panel.setSyncState(syncOffset, driftHint, fitSuggestion);
       maybeLoadTranslations();
     } else {
-      Panel.showPlain(result.plain, result.matched);
+      console.log(`${LOG} Unsynced lyrics loaded from ${result.source} (matched "${result.matched}"${cacheNote}).`);
+      Panel.showPlain(result.plain, result.matched, result.source);
     }
   } catch (err) {
     if (id === fetchId) {
@@ -264,11 +312,15 @@ function detect() {
     if (Number.isFinite(dur) && (firstEver || metadataFresh || restarted || gaveUp)) {
       const via = firstEver ? "first" : metadataFresh ? "metadata" : restarted ? "restart" : "timeout";
       console.log(`${LOG} → "${title}" len=${Math.round(dur)}s at=${clockNow.toFixed(1)}s videos=${document.querySelectorAll("video").length} trusted=${clockTrusted} via=${via}`);
+      // Title/artist/album from the media session when it already describes
+      // this song (it's cleaner), the player bar otherwise.
+      const info = songInfo(title, artist);
       lastSongKey = songKey;
-      lastTitle = title;
-      lastArtist = artist;
+      lastTitle = info.title;
+      lastArtist = info.artist;
+      lastMeta = { album: info.album, source: info.source };
       pendingSince = 0;
-      onSongChange(title, artist, dur, !firstEver);
+      onSongChange(info.title, info.artist, dur, !firstEver, lastMeta);
     }
     return;
   }
@@ -281,7 +333,7 @@ function detect() {
     Math.abs(dur - fetchedDuration) > 2
   ) {
     console.log(`${LOG} track length corrected ${Math.round(fetchedDuration)}s → ${Math.round(dur)}s, refetching lyrics`);
-    onSongChange(lastTitle, lastArtist, dur);
+    onSongChange(lastTitle, lastArtist, dur, true, lastMeta);
   }
 }
 
@@ -392,7 +444,7 @@ WordPopup.onOpenChange((open) => Panel.setScrollPaused(open));
 
 // "Try again" after a failed fetch: same song, same length. The clock is
 // mid-song by then, so the lyrics follow it straight away.
-Panel.onRetry(() => onSongChange(lastTitle, lastArtist, fetchedDuration, false));
+Panel.onRetry(() => onSongChange(lastTitle, lastArtist, fetchedDuration, false, lastMeta));
 
 // Words already in your list wear a highlighter mark in every song. The list
 // changes when you save a word, delete one, or a sync brings in words saved

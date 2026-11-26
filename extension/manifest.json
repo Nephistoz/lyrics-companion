@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Lyrics & Vocab Companion (dev)",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Synced lyrics on YouTube Music — tap words to translate, save, and review them anywhere.",
   "permissions": ["storage"],
   "action": {
@@ -19,6 +19,12 @@
       "matches": ["https://music.youtube.com/*"],
       "js": ["config.js", "lyricsProvider.js", "meaningProvider.js", "syncProvider.js", "settingsStore.js", "offsetStore.js", "vocabStore.js", "panel.js", "wordPopup.js", "content.js"],
       "css": ["panel.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["mediaSessionBridge.js"],
+      "world": "MAIN",
       "run_at": "document_idle"
     }
   ]
