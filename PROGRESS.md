@@ -59,9 +59,12 @@ lyrics-companion/     (git repo, main branch — public on GitHub for Pages)
 - Language pair (2026-07-14): learning **English**, native **Spanish**. Definitions = Free Dictionary API (per spec). Translation = **Lingva** (Robi's choice) with an instance list — dialectapp.org was the only healthy mirror on 2026-07-14 (lingva.ml & friends had broken upstreams) — and **MyMemory as automatic last resort**. All lookups have 4s timeouts; definition and translation fail independently.
 - Word capture details: words tokenized with apostrophe-friendly regex ("don't", "gettin'" = one word); slang "…in'" retries the dictionary with "…ing"; Google's echo-back of unknown words is discarded when the dictionary also found nothing (protects real cognates). Vocabulary list lives in the toolbar-icon popup (`action.default_popup`), newest first, with delete buttons (small extra beyond spec — needed to clean up mis-taps while testing).
 
+- Smarter LRCLIB matching (2026-11-26): `lyricsProvider.js` builds title/artist variants (strips Remaster/Live/Radio Edit/From "…"/feat. tags, tries the main artist alone, turns "X - Topic" and "XVEVO" channels into real names, splits "Artist - Song" re-uploads) and tries up to 4 `/api/get` pairs before searching. Search results must now resemble our title AND artist (accent-insensitive) or we show "No lyrics found" instead of a wrong song. Offline checks: `node tests/lyricsProvider.test.js`. Live-tested from the browser against real LRCLIB: "TQG — KAROL G & Nicki Minaj", "Bailando (Spanish Version) — EnriqueIglesiasVEVO", "Queen - Don't Stop Me Now (Official Video)" by a re-upload channel now resolve (all missed before); "Yesterday (Live At The BBC)" now gets the right-length version.
+
 ## Known issues / notes
 
-- Artist parsing is naive: byline "Artist • Album • Year" split on the first "•". Multi-artist strings ("A & B") come through as-is — fine for lyrics search, revisit if LRCLIB matching suffers.
+- Artist parsing is naive: byline "Artist • Album • Year" split on the first "•". Multi-artist strings ("A & B") come through as-is; `lyricsProvider.js` retries with the main artist.
+- LRCLIB rate-limits bursts (HTTP 429 after ~15 quick calls). A miss now costs up to 6 calls instead of 3 — fine for one song at a time, but a 429 shows as "Lyrics fetch failed".
 - LRC parser handles one timestamp per line only (rare multi-timestamp LRC lines are skipped per-tag) — fine for LRCLIB content.
 - On song change the previous song's `duration` can be read for a moment; the search fallback absorbs the occasional bad exact-match. Watch for wrong-lyrics reports.
 - Highlight can lag up to ~0.5s (tick interval) — acceptable so far.
