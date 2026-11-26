@@ -14,6 +14,12 @@
       "js": ["config.js", "lyricsProvider.js", "meaningProvider.js", "syncProvider.js", "vocabStore.js", "panel.js", "wordPopup.js", "content.js"],
       "css": ["panel.css"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://music.youtube.com/*"],
+      "js": ["mediaSessionBridge.js"],
+      "world": "MAIN",
+      "run_at": "document_idle"
     }
   ]
 }

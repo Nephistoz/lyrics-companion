@@ -70,6 +70,14 @@ lyrics-companion/     (git repo, main branch — public on GitHub for Pages)
 - Companion app is unaffected (it passes no `getVideoId`, and YT's API isn't reachable from github.io anyway).
 - Undocumented API: if the fallback stops finding anything, check the `MPLY` browseId and `musicDescriptionShelfRenderer` names first. Licensing note for M7: these are licensed lyrics, fine for personal use only.
 
+## Lyrics retrieval hardening (2026-11-26, branch `claude/project-thread-qpwcbz`)
+
+- **Timeout + retry:** every LRCLIB call gives up after 7s and retries once after 1s on timeout, network error, 429 or 5xx (404 = normal "not found", never retried). Worst case on a dead LRCLIB ≈ 15s per call before the YT Music fallback runs.
+- **Cache** wraps the whole source chain (LRCLIB + YT Music fallback), so YT Music results are cached too. `lyricsCache` in `chrome.storage.local` (localStorage in the companion), keyed by lowercase title|artist (no duration — it can be stale right after a skip). Hits kept until 300 songs, oldest dropped. Misses cached 24h. Network errors never cached.
+- **Missed-songs log:** `lyricsMisses` (max 200): raw title/artist/album/duration, the cleaned search title, reason (`not_found` = no source had it / `error` = LRCLIB unreachable and YT had nothing), try count. Visible in the toolbar popup under "Songs without lyrics" with Copy/Clear. A song that later resolves removes itself.
+- **Media session:** `mediaSessionBridge.js` runs in the page's MAIN world (needs Chrome 111+) and copies `navigator.mediaSession.metadata` onto `<html data-lc-media-session>`. content.js uses it for title/artist/album only when its title matches the player bar (avoids stale metadata after a skip). `/api/get` is tried with `album_name` first, then without.
+- Not verified live yet: the cloud environment can't reach lrclib.net. Logic tested offline with a mocked fetch/storage.
+
 ## Known issues / notes
 
 - Artist parsing is naive: byline "Artist • Album • Year" split on the first "•". Multi-artist strings ("A & B") come through as-is; `lyricsProvider.js` retries with the main artist.
